@@ -65,17 +65,72 @@ after that step (not just what changed). Claims from earlier steps can be
 used in later answers. When students move on, they can carry their own map
 forward or start from the model answer.
 
-## Model wording
+## Rewording claims
 
-Students may reword claims on their map. `modelWording` gives your preferred
-statement of a claim. Students see it next to their own wording when they
-check their work, and it is used in the model-answer map. Wording is not
-scored.
+`rewording` controls how students may restate claims on their map:
+
+| Setting | What students do | Scored? |
+|---|---|---|
+| `free` (default) | Type their own wording | No: shown next to your `modelWording` after checking |
+| `choose` | Pick from wordings you write in `wordingChoices` | Yes, 1 point per claim in the answer |
+| `none` | Keep the passage wording | n/a |
+
+Whatever students type or pick, grading of the map itself always uses the
+passage text the claim came from, never the wording.
+
+### `free`: model wording
+
+`modelWording` gives your preferred statement of a claim. Students see it
+next to their own wording when they check their work, and it is used in the
+model-answer map.
 
 ```yaml
 modelWording:
   c1: The city should adopt the congestion-pricing policy.
 ```
+
+### `choose`: wording choices
+
+For each claim, give the best wording and two or three that are plausible
+but flawed. Good flaws: leaves a pronoun unresolved, too strong, too weak,
+too broad, changes the subject, drops the key point. `why` is shown when a
+student picks that option. Choices are shuffled; students also see the
+passage wording ("As written"), which earns no wording point.
+
+```yaml
+rewording: choose
+wordingChoices:
+  c1:
+    best: Colleges should require their athletes to take drug tests.
+    others:
+      - text: Colleges should drug-test all of their students.
+        why: Too broad. The author is talking only about athletes.
+```
+
+Claims without `wordingChoices` can't be reworded and aren't scored on
+wording. The `best` wording is used in the model-answer map.
+
+## Claim bank: unstated premises
+
+`bank` lists claims that are not in the passage. Include the unstated
+premises the argument needs, plus a few decoys it doesn't. Students add them
+from a "Claim bank" panel (shown in random order) and use them like any other
+claim. Use bank ids in answers exactly like passage claim ids.
+
+```yaml
+bank:
+  - id: b1
+    text: Colleges should prevent athletes from gaining unfair advantages.
+  - id: b2            # decoy
+    text: Most college athletes use performance-enhancing drugs.
+  - id: b3
+    text: A claim that is only offered from step 2 onward.
+    step: 2
+```
+
+If a student leaves out a needed bank claim, feedback says how many unstated
+claims are missing without naming them. Decoys on the map get a no-points
+note, or your `mistakes` message if you wrote one.
 
 ## Building an answer key by drawing it
 

@@ -37,7 +37,7 @@ export function mapFromAnswer(lesson: Lesson, answer: Answer): ArgumentMap {
     nodes: ids.map((id) => ({
       id: `n-${id}`,
       text: lesson.claims[id].modelText,
-      source: lesson.claims[id].span,
+      source: lesson.claims[id].source,
       position: { x: 0, y: 0 },
     })),
     relations: answer.relations.map((r, i) => ({

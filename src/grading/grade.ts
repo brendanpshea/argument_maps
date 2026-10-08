@@ -1,4 +1,4 @@
-import type { Answer, ArgumentMap, Lesson, MapRelation, Span, Step } from '../model/types';
+import { isBank, type Answer, type ArgumentMap, type ClaimSource, type Lesson, type MapRelation, type Span, type Step } from '../model/types';
 
 export type ItemStatus = 'correct' | 'partial' | 'wrong' | 'missing' | 'note';
 
@@ -17,7 +17,7 @@ export interface GradeResult {
   mapping: Record<string, string>;
 }
 
-export const POINTS = { conclusion: 2, claim: 1, relation: 2 } as const;
+export const POINTS = { conclusion: 2, claim: 1, relation: 2, wording: 1 } as const;
 
 /**
  * A highlight counts as a claim when most of the highlight lies inside the
@@ -45,27 +45,34 @@ export function spanMatch(highlight: Span, claim: Span): number {
   return inter / (Math.max(highlight.end, claim.end) - Math.min(highlight.start, claim.start));
 }
 
-/** Matches each student node to the lesson claim its passage text came from. */
+/** The claim a node came from, with a match score (higher is better). */
+function candidateClaim(lesson: Lesson, source: ClaimSource): { claimId: string; score: number } | undefined {
+  if (isBank(source)) return lesson.claims[source.bank] ? { claimId: source.bank, score: 1 } : undefined;
+  const passage = lesson.steps[source.segment]?.passage ?? '';
+  const span = trimSpan(source, passage);
+  let top: { claimId: string; score: number } | undefined;
+  for (const claim of Object.values(lesson.claims)) {
+    if (isBank(claim.source)) continue;
+    const score = spanMatch(span, trimSpan(claim.source, passage));
+    if (score > 0 && (!top || score > top.score)) top = { claimId: claim.id, score };
+  }
+  return top;
+}
+
+/** Matches each student node to the lesson claim it came from (passage text or claim bank). */
 export function matchNodes(lesson: Lesson, map: ArgumentMap): { mapping: Record<string, string>; duplicates: string[] } {
   const best: Record<string, { nodeId: string; score: number }> = {};
+  const matched = new Set<string>();
   for (const node of map.nodes) {
-    const passage = lesson.steps[node.source.segment]?.passage ?? '';
-    const span = trimSpan(node.source, passage);
-    let top: { claimId: string; score: number } | undefined;
-    for (const claim of Object.values(lesson.claims)) {
-      const score = spanMatch(span, trimSpan(claim.span, passage));
-      if (score > 0 && (!top || score > top.score)) top = { claimId: claim.id, score };
-    }
+    const top = candidateClaim(lesson, node.source);
     if (!top) continue;
+    matched.add(node.id);
     const prev = best[top.claimId];
     if (!prev || top.score > prev.score) best[top.claimId] = { nodeId: node.id, score: top.score };
   }
   const mapping: Record<string, string> = {};
   for (const [claimId, { nodeId }] of Object.entries(best)) mapping[nodeId] = claimId;
-  const duplicates = map.nodes
-    .filter((n) => !mapping[n.id])
-    .filter((n) => Object.values(lesson.claims).some((c) => spanMatch(n.source, c.span) > 0))
-    .map((n) => n.id);
+  const duplicates = map.nodes.filter((n) => matched.has(n.id) && !mapping[n.id]).map((n) => n.id);
   return { mapping, duplicates };
 }
 
@@ -84,7 +91,7 @@ function gradeAgainst(lesson: Lesson, step: Step, map: ArgumentMap, answer: Answ
   const nodeFor = (claimId: string) => map.nodes.find((n) => mapping[n.id] === claimId);
   const name = (claimId: string) => {
     const claim = lesson.claims[claimId];
-    if (lesson.claimMode === 'marked') return `(${claim.number})`;
+    if (lesson.claimMode === 'marked' && !isBank(claim.source)) return `(${claim.number})`;
     return `“${truncate(nodeFor(claimId)?.text ?? claim.modelText)}”`;
   };
   const nodeName = (nodeId: string) => {
@@ -113,16 +120,44 @@ function gradeAgainst(lesson: Lesson, step: Step, map: ArgumentMap, answer: Answ
 
   // Claims
   const answerClaims = [...new Set([answer.conclusion, ...answer.relations.flatMap((r) => [...r.from, r.to])])];
-  const missingClaims = answerClaims.filter((id) => !nodeFor(id));
+  const missing = answerClaims.filter((id) => !nodeFor(id));
+  const missingBank = missing.filter((id) => isBank(lesson.claims[id].source));
+  const missingPassage = missing.filter((id) => !missingBank.includes(id));
+  const claims = (n: number) => `${n} ${n === 1 ? 'claim' : 'claims'}`;
   for (const id of answerClaims) {
     if (nodeFor(id)) items.push({ status: 'correct', earned: POINTS.claim, possible: POINTS.claim, message: `Included claim ${name(id)}.` });
   }
-  if (missingClaims.length) {
+  if (missingPassage.length) {
     const message =
       lesson.claimMode === 'marked'
-        ? `Missing ${missingClaims.length === 1 ? 'claim' : 'claims'} ${joinNames(missingClaims.map(name))}.`
-        : `Your map is missing ${missingClaims.length} ${missingClaims.length === 1 ? 'claim' : 'claims'} from the passage.`;
-    items.push({ status: 'missing', earned: 0, possible: POINTS.claim * missingClaims.length, message });
+        ? `Missing ${missingPassage.length === 1 ? 'claim' : 'claims'} ${joinNames(missingPassage.map(name))}.`
+        : `Your map is missing ${claims(missingPassage.length)} from the passage.`;
+    items.push({ status: 'missing', earned: 0, possible: POINTS.claim * missingPassage.length, message });
+  }
+  if (missingBank.length) {
+    items.push({
+      status: 'missing',
+      earned: 0,
+      possible: POINTS.claim * missingBank.length,
+      message: `The argument relies on ${claims(missingBank.length)} the author didn't state. Look in the claim bank.`,
+    });
+  }
+
+  // Wording (only when students choose from the author's wordings)
+  if (lesson.rewording === 'choose') {
+    for (const id of answerClaims) {
+      const node = nodeFor(id);
+      const choices = lesson.claims[id].wordingChoices;
+      if (!node || !choices) continue;
+      const chosen = choices.find((c) => c.text === node.text);
+      if (chosen === choices[0]) {
+        items.push({ status: 'correct', earned: POINTS.wording, possible: POINTS.wording, message: `Clear wording for ${name(id)}.` });
+      } else if (chosen) {
+        items.push({ status: 'wrong', earned: 0, possible: POINTS.wording, message: `Wording of ${name(id)}: ${chosen.why ?? 'there is a clearer, more accurate wording.'}` });
+      } else {
+        items.push({ status: 'missing', earned: 0, possible: POINTS.wording, message: `Choose the clearest wording for ${name(id)} (the ✎ button).` });
+      }
+    }
   }
 
   // Relations
@@ -174,6 +209,7 @@ function gradeAgainst(lesson: Lesson, step: Step, map: ArgumentMap, answer: Answ
   }
 
   // Notes (no points) on things the model answer doesn't have
+  const explained = new Set<string>();
   for (const s of student) {
     if (accounted.has(s.raw)) continue;
     const mistake = step.mistakes.find(
@@ -182,6 +218,7 @@ function gradeAgainst(lesson: Lesson, step: Step, map: ArgumentMap, answer: Answ
     const message =
       mistake?.message ??
       `The model answer has no link where ${joinNames(s.raw.from.map(nodeName))} ${verb(s.raw)} ${nodeName(s.raw.to)}.`;
+    if (mistake) s.from.forEach((id) => explained.add(id));
     items.push({ status: 'note', earned: 0, possible: 0, message });
   }
   for (const node of map.nodes) {
@@ -190,7 +227,7 @@ function gradeAgainst(lesson: Lesson, step: Step, map: ArgumentMap, answer: Answ
       items.push({ status: 'note', earned: 0, possible: 0, message: `${nodeName(node.id)} repeats a claim already in your map.` });
     } else if (!claimId) {
       items.push({ status: 'note', earned: 0, possible: 0, message: `${nodeName(node.id)} doesn't match a claim in the passage. Is it background or commentary rather than part of the argument?` });
-    } else if (!answerClaims.includes(claimId)) {
+    } else if (!answerClaims.includes(claimId) && !explained.has(claimId)) {
       items.push({ status: 'note', earned: 0, possible: 0, message: `${name(claimId)} isn't part of the argument in the model answer.` });
     }
   }

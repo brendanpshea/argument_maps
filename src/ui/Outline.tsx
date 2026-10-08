@@ -1,18 +1,49 @@
 import { useState } from 'react';
-import type { ArgumentMap, RelationType } from '../model/types';
+import type { ArgumentMap, MapNode, RelationType } from '../model/types';
+import type { WordingEdit } from './MapEditor';
 import * as ops from '../model/ops';
 
 interface Props {
   map: ArgumentMap;
   onChange: (map: ArgumentMap) => void;
   nameFor: (nodeId: string) => string;
+  editFor: (nodeId: string) => WordingEdit;
+}
+
+function ClaimWording({ node, edit, label, onChange }: { node: MapNode; edit: WordingEdit; label: string; onChange: (text: string) => void }) {
+  const id = `text-${node.id}`;
+  if (edit.kind === 'none') return <p className="outline-text">{node.text}</p>;
+  return (
+    <>
+      <label className="visually-hidden" htmlFor={id}>
+        {label}
+      </label>
+      {edit.kind === 'choose' ? (
+        <select id={id} value={node.text} onChange={(e) => onChange(e.target.value)}>
+          {[...new Set([node.text, ...edit.choices])].map((c) => (
+            <option key={c} value={c}>
+              {c}
+            </option>
+          ))}
+        </select>
+      ) : (
+        <textarea
+          id={id}
+          rows={2}
+          defaultValue={node.text}
+          key={node.text}
+          onBlur={(e) => e.target.value.trim() && e.target.value !== node.text && onChange(e.target.value.trim())}
+        />
+      )}
+    </>
+  );
 }
 
 /**
  * A keyboard- and screen-reader-friendly way to build the same map as the
  * drag-and-drop canvas.
  */
-export function Outline({ map, onChange, nameFor }: Props) {
+export function Outline({ map, onChange, nameFor, editFor }: Props) {
   const [premises, setPremises] = useState<string[]>([]);
   const [target, setTarget] = useState('');
   const [type, setType] = useState<RelationType>('support');
@@ -30,10 +61,7 @@ export function Outline({ map, onChange, nameFor }: Props) {
       <ul className="outline-claims">
         {map.nodes.map((n) => (
           <li key={n.id}>
-            <label className="visually-hidden" htmlFor={`text-${n.id}`}>
-              Wording of claim {nameFor(n.id)}
-            </label>
-            <textarea id={`text-${n.id}`} rows={2} defaultValue={n.text} key={n.text} onBlur={(e) => e.target.value.trim() && e.target.value !== n.text && onChange(ops.setText(map, n.id, e.target.value.trim()))} />
+            <ClaimWording node={n} edit={editFor(n.id)} label={`Wording of claim ${nameFor(n.id)}`} onChange={(text) => onChange(ops.setText(map, n.id, text))} />
             <label>
               <input type="radio" name="conclusion" checked={map.conclusion === n.id} onChange={() => onChange({ ...map, conclusion: n.id })} /> Main conclusion
             </label>

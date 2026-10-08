@@ -19,16 +19,34 @@ export function compileLesson(yamlSource: string, fileName = 'lesson'): Lesson {
     throw new Error(`${fileName}: ${msg}`);
   };
 
+  let passageClaims = 0;
+  for (const b of file.bank ?? []) {
+    if ((b.step ?? 1) > file.steps.length) fail(`bank claim "${b.id}" is offered at step ${b.step}, but there are only ${file.steps.length} steps`);
+  }
+
   file.steps.forEach((stepFile, segment) => {
     const passage = parsePassage(stepFile.passage);
     for (const c of passage.claims) {
       if (claims[c.id]) fail(`claim "${c.id}" is marked more than once`);
+      const choices = file.wordingChoices?.[c.id];
       claims[c.id] = {
         id: c.id,
-        number: Object.keys(claims).length + 1,
+        number: ++passageClaims,
         passageText: c.text,
-        modelText: file.modelWording?.[c.id] ?? c.text,
-        span: { segment, start: c.start, end: c.end },
+        modelText: choices?.best ?? file.modelWording?.[c.id] ?? c.text,
+        source: { segment, start: c.start, end: c.end },
+        wordingChoices: choices && [{ text: choices.best }, ...choices.others],
+      };
+    }
+    for (const b of (file.bank ?? []).filter((b) => (b.step ?? 1) - 1 === segment)) {
+      if (claims[b.id]) fail(`claim "${b.id}" is defined more than once`);
+      claims[b.id] = {
+        id: b.id,
+        number: 0,
+        passageText: b.text.trim(),
+        modelText: b.text.trim(),
+        source: { bank: b.id },
+        bankStep: segment,
       };
     }
 
@@ -62,8 +80,16 @@ export function compileLesson(yamlSource: string, fileName = 'lesson'): Lesson {
     });
   });
 
-  for (const id of Object.keys(file.modelWording ?? {})) {
-    if (!claims[id]) fail(`modelWording has "${id}", which is not marked in the passage`);
+  for (const [field, ids] of [
+    ['modelWording', Object.keys(file.modelWording ?? {})],
+    ['wordingChoices', Object.keys(file.wordingChoices ?? {})],
+  ] as const) {
+    for (const id of ids) {
+      if (!claims[id] || claims[id].bankStep !== undefined) fail(`${field} has "${id}", which is not marked in the passage`);
+    }
+  }
+  if (file.wordingChoices && file.rewording !== 'choose') {
+    fail('wordingChoices are only used with `rewording: choose`');
   }
 
   return {
@@ -71,6 +97,7 @@ export function compileLesson(yamlSource: string, fileName = 'lesson'): Lesson {
     title: file.title,
     description: file.description?.trim(),
     claimMode: file.claimMode,
+    rewording: file.rewording,
     claims,
     steps,
   };
