@@ -1,0 +1,90 @@
+id: social-media-ban
+title: A social media ban for teens
+description: >
+  A three-step problem: map an argument, add new evidence, then add an
+  objection and a reply. You find the claims yourself and may reword them.
+claimMode: highlight
+
+modelWording:
+  s1: Lawmakers should ban social media accounts for people under sixteen.
+  s2: Heavy social media use is correlated with higher rates of anxiety and depression among teenagers.
+  s3: Younger teenagers are less able than adults to limit their own time on social media.
+  s5: A ban would be ineffective, because teenagers can easily lie about their age.
+
+steps:
+  - title: The argument
+    instructions: >
+      Select the text of each claim in the passage and press "Add claim".
+      You can reword a claim on the map (double-click it) so that it is clear
+      on its own, e.g. replace pronouns with what they refer to. Mark the main
+      conclusion and connect the premises to it.
+    passage: |
+      Lawmakers are debating whether to ban social media accounts for anyone under
+      sixteen. I think {{s1|they should pass the ban}}. {{s2|Heavy social media use is
+      linked to rising rates of anxiety and depression among teenagers}}, and
+      {{s3|younger teens are less able than adults to regulate how much time they spend
+      on these apps}}.
+    answer:
+      conclusion: s1
+      relations:
+        - { type: support, from: [s2, s3], to: s1 }
+    alternatives:
+      # Reading the premises as independent reasons is also defensible.
+      - conclusion: s1
+        relations:
+          - { type: support, from: [s2], to: s1 }
+          - { type: support, from: [s3], to: s1 }
+
+  - title: New evidence
+    instructions: >
+      A newspaper reports a new study. Add it to your map. Which claim does it
+      bear on most directly?
+    passage: |
+      A follow-up report adds that {{s4|in one large study, teens who took a month-long
+      break from social media reported significantly better mood}}.
+    answer:
+      conclusion: s1
+      relations:
+        - { type: support, from: [s2, s3], to: s1 }
+        - { type: support, from: [s4], to: s2 }
+    alternatives:
+      - conclusion: s1
+        relations:
+          - { type: support, from: [s2], to: s1 }
+          - { type: support, from: [s3], to: s1 }
+          - { type: support, from: [s4], to: s2 }
+    mistakes:
+      - relation: { type: support, from: [s4], to: s1 }
+        message: >
+          The study is evidence that social media use harms teens' mood, so it
+          supports the premise about anxiety and depression rather than the
+          conclusion directly.
+
+  - title: Objection and reply
+    instructions: >
+      Critics respond, and the author replies. Add the objection and the
+      rebuttal to your map.
+    passage: |
+      Critics respond that {{s5|a ban would be easy to evade, since teens can simply lie
+      about their age}}. However, {{s6|age verification technology now makes lying about
+      one's age far harder than it used to be}}.
+    answer:
+      conclusion: s1
+      relations:
+        - { type: support, from: [s2, s3], to: s1 }
+        - { type: support, from: [s4], to: s2 }
+        - { type: objection, from: [s5], to: s1 }
+        - { type: rebuttal, from: [s6], to: s5 }
+    alternatives:
+      - conclusion: s1
+        relations:
+          - { type: support, from: [s2], to: s1 }
+          - { type: support, from: [s3], to: s1 }
+          - { type: support, from: [s4], to: s2 }
+          - { type: objection, from: [s5], to: s1 }
+          - { type: rebuttal, from: [s6], to: s5 }
+    mistakes:
+      - relation: { type: support, from: [s6], to: s1 }
+        message: >
+          The point about age verification isn't a new reason for the ban; it
+          answers the critics' objection. Connect it to the objection as a rebuttal.

@@ -1,0 +1,39 @@
+id: zoos
+title: Should zoos be phased out?
+description: >
+  A short argument with a linked pair of premises, a sub-argument,
+  an objection, and a rebuttal. The claims are numbered for you.
+claimMode: marked
+
+steps:
+  - instructions: >
+      Click each claim that is part of the argument to add it to your map
+      (not every sentence is!). Mark the main conclusion with ★, then drag
+      from one claim to another to show which claims support or object to which.
+      Drop a premise onto an existing link to make a linked argument.
+    passage: |
+      {{x1|Zoos have existed since ancient Egypt.}} But {{c1|modern zoos should be phased out}}.
+      {{c2|Large animals such as elephants suffer in captivity}}, as {{c3|they show stress
+      behaviors like pacing and swaying that are almost never seen in the wild}}. Moreover,
+      {{c4|zoos justify themselves mainly by appeal to conservation}}, yet {{c5|most species
+      kept in zoos are not endangered}}.
+
+      Some argue that {{c6|zoos inspire children to care about wildlife}}. But {{c7|nature
+      documentaries and wildlife sanctuaries can inspire children just as well}}.
+    answer:
+      conclusion: c1
+      relations:
+        - { type: support, from: [c2], to: c1 }
+        - { type: support, from: [c3], to: c2 }
+        - { type: support, from: [c4, c5], to: c1 }
+        - { type: objection, from: [c6], to: c1 }
+        - { type: rebuttal, from: [c7], to: c6 }
+    mistakes:
+      - relation: { type: support, from: [c3], to: c1 }
+        message: >
+          Claim (3) is evidence that the animals suffer, that is, for claim (2).
+          It bears on the conclusion only through (2).
+      - relation: { type: support, from: [c7], to: c1 }
+        message: >
+          Claim (7) doesn't give a new reason to close zoos. It answers the
+          objection in (6). That makes it a rebuttal.
