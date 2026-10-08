@@ -51,19 +51,33 @@ note, not a penalty.
     (convergent) go in separate relations.
 - `alternatives`: other answers that also earn full credit. Students are graded
   against whichever answer suits their map best.
-- `mistakes`: feedback for specific wrong links you expect, e.g.
+- `mistakes`: feedback for specific wrong links you expect. Students never
+  see the model answer, so write these as hints (a question that points them
+  back to the text), not as the correct answer. For example:
   ```yaml
   mistakes:
     - relation: { type: support, from: [c3], to: c1 }
-      message: Claim 3 supports claim 2, not the conclusion directly.
+      message: Does (3) bear on the conclusion directly, or on another premise?
   ```
 
 ## Multi-step lessons
 
 Each step adds text to the passage, and its `answer` is the **whole** map
 after that step (not just what changed). Claims from earlier steps can be
-used in later answers. When students move on, they can carry their own map
-forward or start from the model answer.
+used in later answers. A student unlocks the next step only by getting the
+current one fully right, and their map carries forward. If a step accepts
+`alternatives`, make sure every later step accepts the same alternatives
+extended with the new material.
+
+## Students never see the answer
+
+There is no "show answer" button. Feedback names only claims the student
+already has on their map, and points at where to look again rather than
+saying what the right link is. The test suite checks this for every lesson.
+
+The answer keys are still bundled into the page, so a determined student
+could dig them out of the browser's developer tools. That's fine for
+practice; for high-stakes assessment you would need a server.
 
 ## Rewording claims
 
@@ -136,4 +150,5 @@ note, or your `mistakes` message if you wrote one.
 
 Open a lesson with `?author` at the end of the URL (e.g.
 `#/lesson/my-lesson?author`), build the map, and choose **Save, load, and
-reset → Copy answer YAML**. Paste the result into the step.
+reset → Copy answer YAML**. Paste the result into the step. Author mode also
+shows a **Show model answer** button and lets you jump to any step.

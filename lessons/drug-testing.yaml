@@ -27,8 +27,8 @@ steps:
     mistakes:
       - relation: { type: support, from: [b2], to: d1 }
         message: >
-          The author never claims that most athletes use these drugs, and the
-          argument doesn't need it: even a few users would gain an unfair edge.
+          Does the author ever claim that most athletes use these drugs? Would
+          the argument need that to work?
 
 wordingChoices:
   d1:

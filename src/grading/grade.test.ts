@@ -23,6 +23,25 @@ describe('lesson files', () => {
   });
 });
 
+describe('feedback never reveals the answer', () => {
+  // For every step of every lesson, remove each answer claim in turn from the
+  // model map and check that no feedback message mentions the removed claim.
+  it.each(lessonFiles)('%s', (file) => {
+    const lesson = load(file);
+    lesson.steps.forEach((step, i) => {
+      const model = mapFromAnswer(lesson, step.answers[0]);
+      for (const removed of model.nodes) {
+        const claim = lesson.claims[removed.id.slice(2)];
+        const map = { ...model, nodes: model.nodes.filter((n) => n !== removed), conclusion: model.conclusion === removed.id ? undefined : model.conclusion };
+        const messages = gradeStep(lesson, i, map).items.map((m) => m.message).join('\n');
+        if (lesson.claimMode === 'marked' && claim.number) expect(messages).not.toContain(`(${claim.number})`);
+        expect(messages).not.toContain(claim.passageText.slice(0, 30));
+        expect(messages).not.toContain(claim.modelText.slice(0, 30));
+      }
+    });
+  });
+});
+
 describe('parsePassage', () => {
   it('strips markup, records offsets, and joins wrapped lines', () => {
     const p = parsePassage('Hello. {{a|Cats are\n  great}}, so {{b|get a cat}}.\n\nNew para.');
@@ -68,7 +87,7 @@ describe('gradeStep', () => {
     const result = gradeStep(zoos, 0, map);
     const partial = result.items.filter((i) => i.status === 'partial');
     expect(partial).toHaveLength(1);
-    expect(partial[0].message).toMatch(/linked/);
+    expect(partial[0].message).toMatch(/work together/);
   });
 
   it('shows the author-written message for a known mistake', () => {
@@ -81,7 +100,7 @@ describe('gradeStep', () => {
       conclusion: 'c1',
     };
     const messages = gradeStep(zoos, 0, map).items.map((i) => i.message);
-    expect(messages.some((m) => m.includes('rebuttal'))).toBe(true);
+    expect(messages.some((m) => m.includes('responding to something else'))).toBe(true);
   });
 
   it('matches highlighted text that only roughly matches a claim, and ignores rewording', () => {

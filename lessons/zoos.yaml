@@ -31,9 +31,9 @@ steps:
     mistakes:
       - relation: { type: support, from: [c3], to: c1 }
         message: >
-          Claim (3) is evidence that the animals suffer, that is, for claim (2).
-          It bears on the conclusion only through (2).
+          Does (3) bear on the conclusion directly, or is it evidence for
+          another premise?
       - relation: { type: support, from: [c7], to: c1 }
         message: >
-          Claim (7) doesn't give a new reason to close zoos. It answers the
-          objection in (6). That makes it a rebuttal.
+          Does (7) give a new reason to phase out zoos? Or is the author
+          responding to something else in the passage?
