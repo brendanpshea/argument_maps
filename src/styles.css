@@ -152,11 +152,11 @@ details > summary { cursor: pointer; color: var(--accent); }
 }
 .claim-node.is-selected { border-color: var(--accent); box-shadow: 0 0 0 3px #1d5fa833; }
 .claim-node.is-conclusion { border-color: var(--conclusion); border-width: 3px; background: #fdf6e7; }
-.claim-head { display: flex; align-items: center; gap: 0.35rem; min-height: 1.4rem; font-size: 0.72rem; }
+.claim-head { display: flex; flex-wrap: wrap; align-items: center; gap: 0.1rem 0.35rem; min-height: 1.4rem; font-size: 0.72rem; }
 .claim-head .claim-number { font-weight: 700; color: var(--accent); font-size: 0.8rem; }
 .conclusion-tag { font-weight: 700; color: var(--conclusion); text-transform: uppercase; letter-spacing: 0.03em; }
 .reworded-tag { color: var(--muted); font-style: italic; }
-.node-tools { margin-left: auto; display: flex; gap: 0.1rem; }
+.node-tools { margin-left: auto; display: flex; gap: 0.1rem; flex: none; }
 .node-tools .icon { padding: 0 0.3rem; border: none; background: none; color: var(--muted); font-size: 0.95rem; line-height: 1.2; }
 .node-tools .icon:hover { color: var(--text); }
 .node-tools .icon[aria-pressed='true'] { color: var(--conclusion); }
@@ -174,3 +174,19 @@ details > summary { cursor: pointer; color: var(--accent); }
 .junction-objection button { background: var(--objection-bg); border: 2px solid var(--objection); color: var(--objection); }
 .junction button:disabled { opacity: 1; }
 .react-flow__node-junction.selected .junction button { box-shadow: 0 0 0 3px #1d5fa855; }
+
+/* Claim bank and wording choices */
+.claim-bank h3 { font-size: 0.95rem; margin: 0 0 0.25rem; }
+.claim-bank p { margin: 0 0 0.5rem; }
+.claim-bank ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 0.4rem; }
+.claim-bank li {
+  display: flex; gap: 0.5rem; align-items: center; justify-content: space-between;
+  padding: 0.4rem 0.6rem; border: 1px dashed var(--border); border-radius: 6px; font-size: 0.92rem;
+}
+.claim-tag { color: #6b4fa0; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; }
+.wording-choices { display: grid; gap: 0.3rem; margin-top: 0.2rem; }
+.wording-choices button { text-align: left; font-size: 0.8rem; padding: 0.3rem 0.45rem; line-height: 1.35; }
+.wording-choices button.on { border-color: var(--accent); background: #e8f0fa; }
+.choice-label { color: var(--muted); font-style: italic; }
+.outline-claims select { grid-column: 1 / -1; width: 100%; font: inherit; font-size: 0.9rem; }
+.outline-text { grid-column: 1 / -1; margin: 0; font-size: 0.9rem; }

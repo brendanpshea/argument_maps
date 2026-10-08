@@ -27,8 +27,14 @@ import { autoLayout } from '../model/layout';
 import * as ops from '../model/ops';
 import { download } from './exportMap';
 
+/** How a claim's wording can be changed. */
+export type WordingEdit = { kind: 'none' } | { kind: 'free' } | { kind: 'choose'; choices: string[] };
+
 type ClaimData = {
   text: string;
+  edit: WordingEdit;
+  /** Small tag shown on the claim, e.g. "unstated" for claim-bank claims. */
+  tag?: string;
   /** Claim number shown in marked mode. */
   label?: string;
   originalText: string;
@@ -65,6 +71,7 @@ function ClaimNode({ id, data, selected }: NodeProps<ClaimNodeT>) {
       <div className="claim-head">
         {data.label && <span className="claim-number">{data.label}</span>}
         {data.isConclusion && <span className="conclusion-tag">Main conclusion</span>}
+        {data.tag && <span className="claim-tag">{data.tag}</span>}
         {reworded && <span className="reworded-tag" title={`Passage: “${data.originalText}”`}>reworded</span>}
         {!data.readOnly && (
           <span className="node-tools">
@@ -76,16 +83,38 @@ function ClaimNode({ id, data, selected }: NodeProps<ClaimNodeT>) {
             >
               ★
             </button>
-            <button className="nodrag icon" title="Reword this claim" onClick={() => { setDraft(data.text); setEditing(true); }}>
-              ✎
-            </button>
+            {data.edit.kind !== 'none' && (
+              <button
+                className="nodrag icon"
+                title={data.edit.kind === 'choose' ? 'Choose a wording' : 'Reword this claim'}
+                aria-pressed={editing}
+                onClick={() => { setDraft(data.text); setEditing(!editing); }}
+              >
+                ✎
+              </button>
+            )}
             <button className="nodrag icon" title="Remove from map" onClick={() => actions.removeNode(id)}>
               ×
             </button>
           </span>
         )}
       </div>
-      {editing ? (
+      {editing && data.edit.kind === 'choose' ? (
+        <div className="nodrag wording-choices" role="radiogroup" aria-label="Choose a wording">
+          {[data.originalText, ...data.edit.choices.filter((c) => c !== data.originalText)].map((choice, i) => (
+            <button
+              key={i}
+              role="radio"
+              aria-checked={choice === data.text}
+              className={`nodrag${choice === data.text ? ' on' : ''}`}
+              onClick={() => { actions.setText(id, choice); setEditing(false); }}
+            >
+              {i === 0 && <span className="choice-label">As written: </span>}
+              {choice}
+            </button>
+          ))}
+        </div>
+      ) : editing ? (
         <div className="nodrag">
           <textarea
             autoFocus
@@ -104,7 +133,7 @@ function ClaimNode({ id, data, selected }: NodeProps<ClaimNodeT>) {
           </button>
         </div>
       ) : (
-        <div className="claim-text" onDoubleClick={() => { if (!data.readOnly) { setDraft(data.text); setEditing(true); } }}>
+        <div className="claim-text" onDoubleClick={() => { if (!data.readOnly && data.edit.kind !== 'none') { setDraft(data.text); setEditing(true); } }}>
           {data.text}
         </div>
       )}
@@ -141,6 +170,8 @@ export interface MapEditorProps {
   /** Claim-number label for a node, if the lesson numbers its claims. */
   labelFor?: (nodeId: string) => string | undefined;
   originalTextFor: (nodeId: string) => string;
+  editFor: (nodeId: string) => WordingEdit;
+  tagFor?: (nodeId: string) => string | undefined;
   exportName?: string;
 }
 
@@ -160,6 +191,8 @@ function buildNodes(map: ArgumentMap, props: MapEditorProps, prev: Node[]): Node
         ...keep(n.id),
         data: {
           text: n.text,
+          edit: props.editFor(n.id),
+          tag: props.tagFor?.(n.id),
           label: props.labelFor?.(n.id),
           originalText: props.originalTextFor(n.id),
           isConclusion: map.conclusion === n.id,

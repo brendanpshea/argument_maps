@@ -50,6 +50,36 @@ export const lessonFileSchema = z.object({
    */
   claimMode: z.enum(['marked', 'highlight']).default('marked'),
   /**
+   * How students may restate claims on their map:
+   * `none` (passage wording only), `free` (type freely; not scored),
+   * `choose` (pick from `wordingChoices`; scored).
+   */
+  rewording: z.enum(['none', 'free', 'choose']).default('free'),
+  /** For `rewording: choose`: the best wording of a claim plus plausible but flawed alternatives. */
+  wordingChoices: z
+    .record(
+      z.string(),
+      z.object({
+        best: z.string(),
+        others: z.array(z.object({ text: z.string(), why: z.string().optional() })).min(1),
+      }),
+    )
+    .optional(),
+  /**
+   * Claims that are not in the passage: unstated premises the argument
+   * needs, and decoys it doesn't. Students add them from the claim bank.
+   */
+  bank: z
+    .array(
+      z.object({
+        id: claimId,
+        text: z.string(),
+        /** First step (1-based) in which the claim is offered. Defaults to 1. */
+        step: z.number().int().min(1).optional(),
+      }),
+    )
+    .optional(),
+  /**
    * Clearer or stronger statements of claims, keyed by claim id. Shown next
    * to the student's own wording when they check their work.
    */

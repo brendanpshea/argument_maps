@@ -52,7 +52,7 @@ export function Feedback({ lesson, map, result }: Props) {
           </ul>
         </>
       )}
-      {compare.length > 0 && (
+      {lesson.rewording === 'free' && compare.length > 0 && (
         <details className="wording">
           <summary>Compare your wording with the model wording</summary>
           <p className="hint">Wording isn't scored. A good restatement is clear on its own, keeps the author's meaning, and drops pronouns and filler.</p>

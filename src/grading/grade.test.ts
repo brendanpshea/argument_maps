@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { compileLesson } from '../lesson/compile';
 import { parsePassage } from '../lesson/passage';
 import { mapFromAnswer } from '../model/layout';
-import type { ArgumentMap, Lesson, MapNode } from '../model/types';
+import type { ArgumentMap, Claim, Lesson, MapNode, Span } from '../model/types';
 import { gradeStep } from './grade';
 
 const lessonsDir = join(__dirname, '../../lessons');
@@ -53,7 +53,7 @@ describe('gradeStep', () => {
   const zoos: Lesson = load('zoos.yaml');
   const node = (claimId: string, text?: string): MapNode => {
     const c = zoos.claims[claimId];
-    return { id: claimId, text: text ?? c.passageText, source: c.span, position: { x: 0, y: 0 } };
+    return { id: claimId, text: text ?? c.passageText, source: c.source, position: { x: 0, y: 0 } };
   };
 
   it('gives partial credit when linked premises are drawn as convergent', () => {
@@ -85,14 +85,14 @@ describe('gradeStep', () => {
   });
 
   it('matches highlighted text that only roughly matches a claim, and ignores rewording', () => {
-    const c1 = zoos.claims.c1;
+    const c1 = zoos.claims.c1 as Claim & { source: Span };
     const map: ArgumentMap = {
       nodes: [
         {
           id: 'n1',
           text: 'Zoos ought to be closed down.',
           // Student also grabbed the word "But" before the claim.
-          source: { ...c1.span, start: c1.span.start - 4 },
+          source: { ...c1.source, start: c1.source.start - 4 },
           position: { x: 0, y: 0 },
         },
       ],
@@ -105,10 +105,10 @@ describe('gradeStep', () => {
   });
 
   it('accepts a highlight of just the core of a long claim, but not a stray fragment', () => {
-    const c3 = zoos.claims.c3; // "they show stress behaviors like pacing ... in the wild"
-    const at = (start: number, end: number): MapNode => ({ id: 'n', text: '', source: { ...c3.span, start, end }, position: { x: 0, y: 0 } });
-    const core = at(c3.span.start, c3.span.start + 'they show stress behaviors like pacing and swaying'.length);
-    const fragment = at(c3.span.start, c3.span.start + 'they show'.length);
+    const c3 = zoos.claims.c3 as Claim & { source: Span }; // "they show stress behaviors like pacing ... in the wild"
+    const at = (start: number, end: number): MapNode => ({ id: 'n', text: '', source: { ...c3.source, start, end }, position: { x: 0, y: 0 } });
+    const core = at(c3.source.start, c3.source.start + 'they show stress behaviors like pacing and swaying'.length);
+    const fragment = at(c3.source.start, c3.source.start + 'they show'.length);
     expect(gradeStep(zoos, 0, { nodes: [core], relations: [] }).mapping.n).toBe('c3');
     expect(gradeStep(zoos, 0, { nodes: [fragment], relations: [] }).mapping.n).toBeUndefined();
   });
@@ -124,5 +124,54 @@ describe('gradeStep', () => {
     const alt = lesson.steps[0].answers[1];
     const result = gradeStep(lesson, 0, mapFromAnswer(lesson, alt));
     expect(result.earned).toBe(result.possible);
+  });
+});
+
+describe('claim bank and wording choices', () => {
+  const lesson: Lesson = load('drug-testing.yaml');
+  const model = mapFromAnswer(lesson, lesson.steps[0].answers[0]);
+  const withText = (map: ArgumentMap, claimId: string, text: string): ArgumentMap => ({
+    ...map,
+    nodes: map.nodes.map((n) => (n.id === `n-${claimId}` ? { ...n, text } : n)),
+  });
+
+  it('matches bank claims by id', () => {
+    const result = gradeStep(lesson, 0, model);
+    expect(result.mapping['n-b1']).toBe('b1');
+  });
+
+  it('asks for unstated claims without naming them', () => {
+    const map = { ...model, nodes: model.nodes.filter((n) => n.id !== 'n-b1') };
+    const items = gradeStep(lesson, 0, map).items.filter((i) => i.status === 'missing');
+    expect(items.some((i) => /claim bank/.test(i.message) && !i.message.includes(lesson.claims.b1.passageText))).toBe(true);
+  });
+
+  it('notes decoy bank claims', () => {
+    const map: ArgumentMap = { ...model, nodes: [...model.nodes, { id: 'x', text: '', source: { bank: 'b2' }, position: { x: 0, y: 0 } }] };
+    const notes = gradeStep(lesson, 0, map).items.filter((i) => i.status === 'note');
+    expect(notes.some((n) => /isn't part of the argument/.test(n.message))).toBe(true);
+  });
+
+  it('scores wording choices and explains wrong ones', () => {
+    const flawed = lesson.claims.d1.wordingChoices![1];
+    const wrong = gradeStep(lesson, 0, withText(model, 'd1', flawed.text)).items.find((i) => i.status === 'wrong');
+    expect(wrong?.message).toContain(flawed.why);
+
+    const unchanged = withText(model, 'd1', lesson.claims.d1.passageText);
+    const missing = gradeStep(lesson, 0, unchanged).items.find((i) => i.status === 'missing');
+    expect(missing?.message).toMatch(/Choose the clearest wording/);
+  });
+
+  it('rejects wording choices unless rewording is "choose"', () => {
+    const yaml = `
+id: bad
+title: Bad
+wordingChoices: { a: { best: A, others: [{ text: B }] } }
+steps:
+  - instructions: x
+    passage: "{{a|A}}"
+    answer: { conclusion: a, relations: [] }
+`;
+    expect(() => compileLesson(yaml)).toThrow(/rewording: choose/);
   });
 });

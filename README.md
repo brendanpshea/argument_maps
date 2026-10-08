@@ -9,9 +9,12 @@ the browser, with no server.
 
 1. **Add claims** from the passage. Depending on the lesson, they either click
    numbered claims or select the claim text themselves.
-2. **Reword** claims on the map so each one is clear on its own (double-click
-   a claim). When they check their work, their wording is shown next to the
-   model wording. Wording isn't scored.
+2. **Reword** claims so each one is clear on its own. Depending on the lesson,
+   students type their own wording (unscored, compared with the model
+   wording), **choose** from wordings the author wrote (scored), or keep the
+   passage wording. Students never create claims by typing: every claim comes
+   from the passage or the **claim bank**, which holds unstated premises plus
+   decoys. That is what keeps the maps autogradable.
 3. **Mark the main conclusion** (★) and **draw links**: drag from the dot on
    top of a premise to the dot under the claim it supports or objects to.
    Drag another premise onto an existing link's label to make a linked
@@ -61,5 +64,4 @@ Pushing to `main` runs the tests, builds, and deploys to GitHub Pages
   app already uses relative paths and hash routing, bundles its lessons, and
   saves progress through the `ProgressStore` interface, so a SCORM 1.2
   implementation can be dropped in.
-- Unstated (implicit) premises.
 - Objections aimed at an inference rather than a claim (undercutters).

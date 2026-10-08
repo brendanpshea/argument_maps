@@ -1,5 +1,5 @@
 import { useRef, useState, type ReactNode } from 'react';
-import type { Claim, Lesson, Span } from '../model/types';
+import { isBank, type Claim, type Lesson, type Span } from '../model/types';
 
 interface Props {
   lesson: Lesson;
@@ -22,9 +22,9 @@ function textOffset(root: HTMLElement, node: Node, offset: number) {
 function MarkedSegment({ lesson, segment, usedSpans, readOnly, onAddClaim }: Omit<Props, 'stepIndex'> & { segment: number }) {
   const text = lesson.steps[segment].passage;
   const claims = Object.values(lesson.claims)
-    .filter((c) => c.span.segment === segment)
+    .flatMap((c) => (isBank(c.source) || c.source.segment !== segment ? [] : [{ ...c, span: c.source }]))
     .sort((a, b) => a.span.start - b.span.start);
-  const inMap = (c: Claim) => usedSpans.some((s) => s.segment === segment && s.start === c.span.start && s.end === c.span.end);
+  const inMap = (c: Claim & { span: Span }) => usedSpans.some((s) => s.segment === segment && s.start === c.span.start && s.end === c.span.end);
   const parts: ReactNode[] = [];
   let pos = 0;
   for (const c of claims) {

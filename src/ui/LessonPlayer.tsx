@@ -3,11 +3,13 @@ import { stringify as toYaml } from 'yaml';
 import { gradeStep, matchNodes, type GradeResult } from '../grading/grade';
 import { mapFromAnswer } from '../model/layout';
 import * as ops from '../model/ops';
-import { emptyMap, type ArgumentMap, type Lesson, type Span } from '../model/types';
+import { stableShuffle } from '../model/shuffle';
+import { emptyMap, isBank, type ArgumentMap, type ClaimSource, type Lesson } from '../model/types';
 import type { LessonProgress, ProgressStore } from '../storage/progress';
 import { downloadMapJson, readMapFile } from './exportMap';
 import { Feedback } from './Feedback';
-import { MapEditor } from './MapEditor';
+import { ClaimBank } from './ClaimBank';
+import { MapEditor, type WordingEdit } from './MapEditor';
 import { Outline } from './Outline';
 import { Passage } from './Passage';
 
@@ -40,11 +42,25 @@ export function LessonPlayer({ lesson, store, authorMode, onExit }: Props) {
   const { mapping } = useMemo(() => matchNodes(lesson, map), [lesson, map]);
   const modelMap = useMemo(() => mapFromAnswer(lesson, step.answers[0]), [lesson, step]);
 
-  const passageTextOf = (span: Span) => lesson.steps[span.segment].passage.slice(span.start, span.end).trim();
+  /** The claim as written: its passage text, or its claim-bank text. */
+  const originalTextOf = (source: ClaimSource) =>
+    isBank(source)
+      ? lesson.claims[source.bank]?.passageText ?? ''
+      : lesson.steps[source.segment].passage.slice(source.start, source.end).trim();
+  const editFor = (m: ArgumentMap, nodeId: string): WordingEdit => {
+    const node = nodeById(m, nodeId);
+    if (!node || lesson.rewording === 'none' || isBank(node.source)) return { kind: 'none' };
+    if (lesson.rewording === 'free') return { kind: 'free' };
+    const claimId = m === modelMap ? nodeId.slice(2) : mapping[nodeId];
+    const choices = claimId ? lesson.claims[claimId]?.wordingChoices : undefined;
+    if (!choices) return { kind: 'none' };
+    return { kind: 'choose', choices: stableShuffle(choices.map((c) => c.text), (t) => t, claimId) };
+  };
   const nodeById = (m: ArgumentMap, id: string) => m.nodes.find((n) => n.id === id);
   const numberFor = (m: ArgumentMap, id: string) => {
     const claimId = m === modelMap ? id.slice(2) : mapping[id];
-    return lesson.claimMode === 'marked' && claimId && lesson.claims[claimId] ? `(${lesson.claims[claimId].number})` : undefined;
+    const claim = claimId ? lesson.claims[claimId] : undefined;
+    return lesson.claimMode === 'marked' && claim && !isBank(claim.source) ? `(${claim.number})` : undefined;
   };
   const nameFor = (id: string) => {
     const n = nodeById(map, id);
@@ -145,9 +161,16 @@ export function LessonPlayer({ lesson, store, authorMode, onExit }: Props) {
           <Passage
             lesson={lesson}
             stepIndex={stepIndex}
-            usedSpans={map.nodes.map((n) => n.source)}
+            usedSpans={map.nodes.flatMap((n) => (isBank(n.source) ? [] : [n.source]))}
             readOnly={showModel}
             onAddClaim={(span, text) => setMap(ops.addNode(map, text, span))}
+          />
+          <ClaimBank
+            lesson={lesson}
+            stepIndex={stepIndex}
+            used={map.nodes.flatMap((n) => (isBank(n.source) ? [n.source.bank] : []))}
+            readOnly={showModel}
+            onAdd={(claim) => setMap(ops.addNode(map, claim.passageText, claim.source))}
           />
 
           <div className="actions">
@@ -178,7 +201,7 @@ export function LessonPlayer({ lesson, store, authorMode, onExit }: Props) {
 
           <details className="outline-wrap">
             <summary>Outline view (edit with the keyboard)</summary>
-            <Outline map={map} onChange={setMap} nameFor={nameFor} />
+            <Outline map={map} onChange={setMap} nameFor={nameFor} editFor={(id) => editFor(map, id)} />
           </details>
 
           <details className="more">
@@ -221,7 +244,12 @@ export function LessonPlayer({ lesson, store, authorMode, onExit }: Props) {
             labelFor={(id) => numberFor(showModel ? modelMap : map, id)}
             originalTextFor={(id) => {
               const n = nodeById(showModel ? modelMap : map, id);
-              return n ? passageTextOf(n.source) : '';
+              return n ? originalTextOf(n.source) : '';
+            }}
+            editFor={(id) => editFor(showModel ? modelMap : map, id)}
+            tagFor={(id) => {
+              const n = nodeById(showModel ? modelMap : map, id);
+              return n && isBank(n.source) ? 'unstated' : undefined;
             }}
             exportName={`${lesson.id}-step${stepIndex + 1}${showModel ? '-model' : ''}`}
           />

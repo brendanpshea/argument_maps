@@ -1,10 +1,10 @@
 /** Pure editing operations on an ArgumentMap. Each returns a new map. */
-import type { ArgumentMap, MapNode, RelationType, Span } from './types';
+import type { ArgumentMap, ClaimSource, MapNode, RelationType } from './types';
 
 let counter = 0;
 const newId = (prefix: string) => `${prefix}${Date.now().toString(36)}${(counter++).toString(36)}`;
 
-export function addNode(map: ArgumentMap, text: string, source: Span, position?: { x: number; y: number }): ArgumentMap {
+export function addNode(map: ArgumentMap, text: string, source: ClaimSource, position?: { x: number; y: number }): ArgumentMap {
   const i = map.nodes.length;
   const node: MapNode = {
     id: newId('n'),

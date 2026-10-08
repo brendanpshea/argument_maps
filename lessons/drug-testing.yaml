@@ -1,0 +1,69 @@
+id: drug-testing
+title: Drug testing for college athletes
+description: >
+  Choose the clearest wording for each claim, and supply the premise the
+  author left unstated.
+claimMode: marked
+rewording: choose
+
+steps:
+  - instructions: >
+      Add the claims, then use ✎ on each claim to choose the wording that is
+      clearest and most faithful to the author. The argument also depends on
+      a claim the author never states: find it in the claim bank and link it
+      with the premise it works together with.
+    passage: |
+      Should colleges drug-test their athletes? {{d1|I'd say yes, they should}}.
+      {{d2|These drugs give the people who use them an edge that nobody else gets}}.
+
+      Some say {{d3|it's an invasion of privacy}}. But {{d4|athletes put up with
+      plenty of that already, since team doctors examine them all the time}}.
+    answer:
+      conclusion: d1
+      relations:
+        - { type: support, from: [d2, b1], to: d1 }
+        - { type: objection, from: [d3], to: d1 }
+        - { type: rebuttal, from: [d4], to: d3 }
+    mistakes:
+      - relation: { type: support, from: [b2], to: d1 }
+        message: >
+          The author never claims that most athletes use these drugs, and the
+          argument doesn't need it: even a few users would gain an unfair edge.
+
+wordingChoices:
+  d1:
+    best: Colleges should require their athletes to take drug tests.
+    others:
+      - text: Colleges should drug-test all of their students.
+        why: Too broad. The author is talking only about athletes.
+      - text: Colleges may drug-test their athletes if they wish.
+        why: Too weak. The author says colleges should test, not merely that they may.
+  d2:
+    best: Performance-enhancing drugs give the athletes who use them an unfair advantage.
+    others:
+      - text: These drugs give their users an edge.
+        why: “These drugs” isn't clear on its own, and it drops the point that the edge is unfair.
+      - text: Performance-enhancing drugs are dangerous to athletes' health.
+        why: That's a different reason. The author's point is about fairness, not health.
+  d3:
+    best: Drug testing violates athletes' privacy.
+    others:
+      - text: It's an invasion of privacy.
+        why: “It” doesn't say what invades privacy, so the claim isn't clear on its own.
+      - text: Drug testing should be illegal.
+        why: Too strong. The objection is about privacy, not about what the law should be.
+  d4:
+    best: Athletes already accept frequent intrusions on their privacy, such as routine exams by team doctors.
+    others:
+      - text: Athletes put up with plenty of that already.
+        why: “That” has no clear referent, so the claim isn't clear on its own.
+      - text: Team doctors examine athletes often.
+        why: This leaves out the point that matters, namely that these exams are privacy intrusions athletes already accept.
+
+bank:
+  - id: b1
+    text: Colleges should prevent athletes from gaining unfair advantages over their competitors.
+  - id: b2
+    text: Most college athletes use performance-enhancing drugs.
+  - id: b3
+    text: Privacy doesn't matter in college sports.
