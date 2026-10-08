@@ -28,7 +28,7 @@ export function Feedback({ lesson, map, result }: Props) {
         </span>
       </div>
       {scored.length === 0 ? (
-        <p className="all-correct">Everything in the model answer is on your map.</p>
+        <p className="all-correct">Your map is correct.</p>
       ) : (
         <ul className="grade-items">
           {scored.map((item, i) => (
@@ -52,7 +52,9 @@ export function Feedback({ lesson, map, result }: Props) {
           </ul>
         </>
       )}
-      {lesson.rewording === 'free' && compare.length > 0 && (
+      {scored.length > 0 && <p className="hint">Revise your map and check again.</p>}
+      {/* Model wording could give away claims or structure, so it appears only once the map is right. */}
+      {lesson.rewording === 'free' && scored.length === 0 && compare.length > 0 && (
         <details className="wording">
           <summary>Compare your wording with the model wording</summary>
           <p className="hint">Wording isn't scored. A good restatement is clear on its own, keeps the author's meaning, and drops pronouns and filler.</p>

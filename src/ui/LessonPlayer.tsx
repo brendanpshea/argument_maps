@@ -28,7 +28,6 @@ export function LessonPlayer({ lesson, store, authorMode, onExit }: Props) {
   const [progress, setProgress] = useState<LessonProgress>(() => store.load(lesson.id) ?? fresh());
   const [result, setResult] = useState<GradeResult | null>(null);
   const [showModel, setShowModel] = useState(false);
-  const [choosingNext, setChoosingNext] = useState(false);
   const [message, setMessage] = useState('');
   const fileInput = useRef<HTMLInputElement>(null);
 
@@ -72,22 +71,22 @@ export function LessonPlayer({ lesson, store, authorMode, onExit }: Props) {
     setProgress((p) => ({ ...p, maps: p.maps.map((m, i) => (i === p.stepIndex ? next : m)) }));
   };
 
-  const goTo = (index: number, startFrom?: ArgumentMap) => {
+  const passed = !!result && result.earned === result.possible;
+  /** Steps unlock one at a time: a student moves on only after getting the current step fully right. */
+  const unlocked = (index: number) => authorMode || index < progress.maps.length;
+  const canAdvance = !isLast && (passed || unlocked(stepIndex + 1));
+
+  const goTo = (index: number) => {
     setResult(null);
     setShowModel(false);
-    setChoosingNext(false);
     setProgress((p) => {
       const maps = [...p.maps];
       const scores = [...p.scores];
-      if (startFrom) maps[index] = structuredClone(startFrom);
+      // A newly unlocked step starts from the student's own (correct) map.
+      if (!maps[index]) maps[index] = structuredClone(maps[p.stepIndex]);
       while (scores.length <= index) scores.push(null);
       return { ...p, stepIndex: index, maps, scores };
     });
-  };
-
-  const next = () => {
-    if (progress.maps[stepIndex + 1]) goTo(stepIndex + 1);
-    else setChoosingNext(true);
   };
 
   const check = () => {
@@ -97,7 +96,8 @@ export function LessonPlayer({ lesson, store, authorMode, onExit }: Props) {
     setProgress((p) => {
       const scores = [...p.scores];
       scores[p.stepIndex] = Math.max(scores[p.stepIndex] ?? 0, fraction);
-      return { ...p, scores, completed: p.completed || p.stepIndex === lesson.steps.length - 1 };
+      const done = fraction === 1 && p.stepIndex === lesson.steps.length - 1;
+      return { ...p, scores, completed: p.completed || done };
     });
   };
 
@@ -144,11 +144,16 @@ export function LessonPlayer({ lesson, store, authorMode, onExit }: Props) {
               <button
                 key={i}
                 aria-current={i === stepIndex ? 'step' : undefined}
-                disabled={i > progress.maps.length - 1 && i !== stepIndex + 1}
-                onClick={() => (i === stepIndex + 1 ? next() : goTo(i))}
+                disabled={!unlocked(i) && !(i === stepIndex + 1 && canAdvance)}
+                title={unlocked(i) || (i === stepIndex + 1 && canAdvance) ? undefined : 'Get the previous step right to unlock this one'}
+                onClick={() => goTo(i)}
               >
                 {i + 1}. {s.title ?? `Step ${i + 1}`}
-                {progress.scores[i] != null && <span className="step-score">{Math.round(progress.scores[i]! * 100)}%</span>}
+                {progress.scores[i] === 1 ? (
+                  <span className="step-score" aria-label="correct">✓</span>
+                ) : (
+                  progress.scores[i] != null && <span className="step-score partial">{Math.round(progress.scores[i]! * 100)}%</span>
+                )}
               </button>
             ))}
           </nav>
@@ -177,27 +182,21 @@ export function LessonPlayer({ lesson, store, authorMode, onExit }: Props) {
             <button className="primary" onClick={check} disabled={!map.nodes.length}>
               Check my map
             </button>
-            <button onClick={() => setShowModel((v) => !v)} aria-pressed={showModel}>
-              {showModel ? 'Back to my map' : 'Show model answer'}
-            </button>
-            {!isLast && <button onClick={next}>Next step →</button>}
+            {authorMode && (
+              <button onClick={() => setShowModel((v) => !v)} aria-pressed={showModel}>
+                {showModel ? 'Back to my map' : 'Show model answer (author)'}
+              </button>
+            )}
+            {!isLast && (
+              <button className={passed ? 'primary' : ''} onClick={() => goTo(stepIndex + 1)} disabled={!canAdvance} title={canAdvance ? undefined : 'Get this step fully right to continue'}>
+                Next step →
+              </button>
+            )}
           </div>
 
-          {choosingNext && (
-            <div className="choice" role="dialog" aria-label="Start the next step">
-              <p>How do you want to start the next step?</p>
-              <button className="primary" onClick={() => goTo(stepIndex + 1, map)}>
-                Continue with my map
-              </button>
-              <button onClick={() => goTo(stepIndex + 1, modelMap)}>Start from the model answer</button>
-              <button className="link-button" onClick={() => setChoosingNext(false)}>
-                Cancel
-              </button>
-            </div>
-          )}
-
           {result && !showModel && <Feedback lesson={lesson} map={map} result={result} />}
-          {result && isLast && result.earned === result.possible && <p className="done">Lesson complete. Nice work!</p>}
+          {passed && !isLast && <p className="done">Step complete. Continue to the next step when you're ready.</p>}
+          {passed && isLast && <p className="done">Lesson complete. Nice work!</p>}
 
           <details className="outline-wrap">
             <summary>Outline view (edit with the keyboard)</summary>

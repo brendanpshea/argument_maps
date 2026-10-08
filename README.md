@@ -20,11 +20,12 @@ the browser, with no server.
    Drag another premise onto an existing link's label to make a linked
    argument. Click a link's label to switch it between *supports* and
    *objects to*. An objection to an objection is shown as *rebuts*.
-4. **Check my map** grades the map (partial credit for linked/convergent
-   mix-ups) and gives hints without giving the answer away. **Show model
-   answer** reveals it.
+4. **Check my map** scores the map and gives hints that point students back
+   to the text without giving the answer away. Students never see the model
+   answer; they revise and check again until the map is right.
 5. Multi-step lessons add new text (evidence, objections, replies) at each
-   step. Students carry their map forward or start from the model answer.
+   step. Getting a step fully right unlocks the next, and the student's map
+   carries forward.
 
 Students can also use an **outline view** to do everything with the keyboard,
 **download** their map as a PNG or as a map file they can load again later,

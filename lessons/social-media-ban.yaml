@@ -56,9 +56,8 @@ steps:
     mistakes:
       - relation: { type: support, from: [s4], to: s1 }
         message: >
-          The study is evidence that social media use harms teens' mood, so it
-          supports the premise about anxiety and depression rather than the
-          conclusion directly.
+          What does the study show, exactly? Is that a direct reason for the
+          ban, or evidence for one of the premises?
 
   - title: Objection and reply
     instructions: >
@@ -86,5 +85,5 @@ steps:
     mistakes:
       - relation: { type: support, from: [s6], to: s1 }
         message: >
-          The point about age verification isn't a new reason for the ban; it
-          answers the critics' objection. Connect it to the objection as a rebuttal.
+          Is the point about age verification a new reason for the ban, or is
+          the author responding to something the critics said?

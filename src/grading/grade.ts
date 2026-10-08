@@ -130,7 +130,7 @@ function gradeAgainst(lesson: Lesson, step: Step, map: ArgumentMap, answer: Answ
   if (missingPassage.length) {
     const message =
       lesson.claimMode === 'marked'
-        ? `Missing ${missingPassage.length === 1 ? 'claim' : 'claims'} ${joinNames(missingPassage.map(name))}.`
+        ? `Your map is missing ${claims(missingPassage.length)} from the passage. Reread it: which numbered claims give reasons, raise objections, or reply to them?`
         : `Your map is missing ${claims(missingPassage.length)} from the passage.`;
     items.push({ status: 'missing', earned: 0, possible: POINTS.claim * missingPassage.length, message });
   }
@@ -168,44 +168,83 @@ function gradeAgainst(lesson: Lesson, step: Step, map: ArgumentMap, answer: Answ
   }));
   const accounted = new Set<MapRelation>();
 
+  // Feedback names only claims the student already has on their map, and never
+  // says what the correct link is: it points at where to look again.
+  const studentNames = (ids: string[]) => {
+    const present = ids.filter((id) => nodeFor(id));
+    return { names: joinNames(present.map(name)), plural: present.length > 1, count: present.length };
+  };
+  let unseenLinks = 0;
+  const unconnected = { ids: new Set<string>(), points: 0 };
+
   for (const key of answer.relations) {
-    const premises = joinNames(key.from.map(name));
-    const plural = key.from.length > 1;
     const exact = student.find((s) => s.raw.type === key.type && s.to === key.to && sameSet(s.from, key.from));
     if (exact) {
       accounted.add(exact.raw);
-      const label = key.type === 'support' ? (plural ? 'support' : 'supports') : plural ? 'object to' : 'objects to';
-      items.push({ status: 'correct', earned: POINTS.relation, possible: POINTS.relation, message: `${premises} ${label} ${name(key.to)}.` });
+      items.push({ status: 'correct', earned: POINTS.relation, possible: POINTS.relation, message: `Correct link to ${name(key.to)}.` });
       continue;
     }
+    const touched = (rels: typeof student) => studentNames(key.from.filter((id) => rels.some((s) => s.from.includes(id))));
     const sameTarget = student.filter((s) => s.to === key.to && intersects(s.from, key.from));
     const grouping = sameTarget.filter((s) => s.raw.type === key.type);
     if (grouping.length) {
       grouping.forEach((s) => accounted.add(s.raw));
-      const message =
-        plural
-          ? `${premises} work together (linked) as one reason for ${name(key.to)}. Combine them into a single link.`
-          : `${premises} ${verb(key)} ${name(key.to)} on its own; it should not be linked with other premises.`;
-      items.push({ status: 'partial', earned: POINTS.relation / 2, possible: POINTS.relation, message });
+      const { names, plural } = touched(grouping);
+      items.push({
+        status: 'partial',
+        earned: POINTS.relation / 2,
+        possible: POINTS.relation,
+        message: `Look again at how ${names} ${plural ? 'connect' : 'connects'} to ${name(key.to)}: does each premise give a reason on its own, or do some only work together with another premise?`,
+      });
       continue;
     }
     if (sameTarget.length) {
       sameTarget.forEach((s) => accounted.add(s.raw));
+      const { names, plural } = touched(sameTarget);
       items.push({
         status: 'wrong',
         earned: 0,
         possible: POINTS.relation,
-        message: `Check whether ${premises} ${plural ? 'give' : 'gives'} a reason for ${name(key.to)} or ${plural ? 'raise' : 'raises'} an objection to it.`,
+        message: `Check whether ${names} ${plural ? 'give' : 'gives'} a reason for ${name(key.to)} or ${plural ? 'raise' : 'raises'} an objection to it.`,
       });
       continue;
     }
     const wrongTarget = student.filter((s) => s.raw.type === key.type && intersects(s.from, key.from) && s.to !== key.to);
     if (wrongTarget.length) {
       wrongTarget.forEach((s) => accounted.add(s.raw));
-      items.push({ status: 'wrong', earned: 0, possible: POINTS.relation, message: `${premises} ${plural ? 'are' : 'is'} connected to the wrong claim. Which claim ${plural ? 'do they' : 'does it'} bear on directly?` });
+      const { names, plural } = touched(wrongTarget);
+      items.push({
+        status: 'wrong',
+        earned: 0,
+        possible: POINTS.relation,
+        message: `${names} ${plural ? 'are' : 'is'} connected to the wrong claim. Which claim ${plural ? 'do they' : 'does it'} bear on most directly?`,
+      });
       continue;
     }
-    items.push({ status: 'missing', earned: 0, possible: POINTS.relation, message: `What role ${plural ? 'do' : 'does'} ${premises} play? ${plural ? 'They aren’t' : 'It isn’t'} connected the way the model answer has it.` });
+    const present = key.from.filter((id) => nodeFor(id));
+    if (!present.length) unseenLinks++;
+    else {
+      unconnected.points += POINTS.relation;
+      present.forEach((id) => unconnected.ids.add(id));
+    }
+  }
+  // One combined message, so the grouping of premises isn't given away.
+  if (unconnected.ids.size) {
+    const { names, plural } = studentNames([...unconnected.ids]);
+    items.push({
+      status: 'missing',
+      earned: 0,
+      possible: unconnected.points,
+      message: `What role ${plural ? 'do' : 'does'} ${names} play in the argument? Check ${plural ? 'their' : 'its'} links.`,
+    });
+  }
+  if (unseenLinks) {
+    items.push({
+      status: 'missing',
+      earned: 0,
+      possible: POINTS.relation * unseenLinks,
+      message: `${unseenLinks === 1 ? 'A link involves a claim' : `${unseenLinks} links involve claims`} that ${unseenLinks === 1 ? "isn't" : "aren't"} on your map yet.`,
+    });
   }
 
   // Notes (no points) on things the model answer doesn't have
@@ -217,7 +256,7 @@ function gradeAgainst(lesson: Lesson, step: Step, map: ArgumentMap, answer: Answ
     );
     const message =
       mistake?.message ??
-      `The model answer has no link where ${joinNames(s.raw.from.map(nodeName))} ${verb(s.raw)} ${nodeName(s.raw.to)}.`;
+      `Reconsider the link where ${joinNames(s.raw.from.map(nodeName))} ${verb(s.raw)} ${nodeName(s.raw.to)}. It doesn't fit the argument.`;
     if (mistake) s.from.forEach((id) => explained.add(id));
     items.push({ status: 'note', earned: 0, possible: 0, message });
   }
@@ -228,7 +267,7 @@ function gradeAgainst(lesson: Lesson, step: Step, map: ArgumentMap, answer: Answ
     } else if (!claimId) {
       items.push({ status: 'note', earned: 0, possible: 0, message: `${nodeName(node.id)} doesn't match a claim in the passage. Is it background or commentary rather than part of the argument?` });
     } else if (!answerClaims.includes(claimId) && !explained.has(claimId)) {
-      items.push({ status: 'note', earned: 0, possible: 0, message: `${name(claimId)} isn't part of the argument in the model answer.` });
+      items.push({ status: 'note', earned: 0, possible: 0, message: `${name(claimId)} isn't part of the argument. Does it give a reason for anything, or is it background?` });
     }
   }
 
