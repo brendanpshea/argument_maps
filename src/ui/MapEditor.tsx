@@ -390,6 +390,38 @@ function buildEdges(map: ArgumentMap, prev: Edge[], readOnly: boolean): LinkEdge
   });
 }
 
+/**
+ * A position for a newly added claim inside the visible area that doesn't overlap other
+ * claims or link labels. Returns null if the claim is already fully in view.
+ */
+function freeSpotInView(
+  map: ArgumentMap,
+  nodeId: string,
+  view: { x: number; y: number; end: { x: number; y: number } },
+): { x: number; y: number } | null {
+  const node = map.nodes.find((n) => n.id === nodeId);
+  if (!node) return null;
+  const margin = 16;
+  const { width: w, height: h } = CLAIM_SIZE;
+  const inView = (p: { x: number; y: number }) =>
+    p.x >= view.x && p.y >= view.y && p.x + w <= view.end.x && p.y + h <= view.end.y;
+  const boxes = [
+    ...map.nodes.filter((n) => n.id !== nodeId).map((n) => ({ ...n.position, w, h })),
+    ...map.relations.map((r) => ({ ...junctionPosition(map, r), w: JUNCTION_SIZE.width, h: JUNCTION_SIZE.height })),
+  ];
+  const free = (p: { x: number; y: number }) =>
+    boxes.every((b) => p.x + w + margin <= b.x || b.x + b.w + margin <= p.x || p.y + h + margin <= b.y || b.y + b.h + margin <= p.y);
+  if (inView(node.position) && free(node.position)) return null;
+  // Scan the visible area row by row for the first free spot.
+  for (let y = view.y; y + h <= view.end.y; y += h / 2) {
+    for (let x = view.x + margin; x + w <= view.end.x; x += w / 4) {
+      if (free({ x, y })) return { x, y };
+    }
+  }
+  // Crowded: put it in the middle of the view so at least it can be seen and dragged.
+  return { x: (view.x + view.end.x - w) / 2, y: (view.y + view.end.y - h) / 2 };
+}
+
 /** Applies the deletion of one edge: a premise line removes that premise; the arrow removes the whole link. */
 function removeEdgeFromMap(map: ArgumentMap, edgeId: string): ArgumentMap {
   const [kind, relId, nodeId] = edgeId.split('|');
@@ -412,6 +444,26 @@ function Editor(props: MapEditorProps) {
     setNodes((prev) => buildNodes(map, props, prev));
     setEdges((prev) => buildEdges(map, prev, !!readOnly));
   }, [map, readOnly]);
+
+  // A claim just added from the passage or the claim bank gets a default spot that may be
+  // off screen (after panning or zooming, or on a small screen). Move it to a free spot in view.
+  const knownIds = useRef<Set<string> | null>(null);
+  useEffect(() => {
+    const known = knownIds.current;
+    knownIds.current = new Set(map.nodes.map((n) => n.id));
+    if (!known || readOnly) return;
+    const added = map.nodes.filter((n) => !known.has(n.id));
+    const rect = wrapper.current?.getBoundingClientRect();
+    if (added.length !== 1 || !rect) return;
+    // The visible area in map coordinates, below the toolbar (which wraps on narrow screens).
+    const toolbarBottom = wrapper.current?.querySelector('.map-toolbar')?.getBoundingClientRect().bottom ?? rect.top + 60;
+    const view = {
+      ...flow.screenToFlowPosition({ x: rect.left, y: toolbarBottom + 8 }),
+      end: flow.screenToFlowPosition({ x: rect.right, y: rect.bottom }),
+    };
+    const spot = freeSpotInView(map, added[0].id, view);
+    if (spot) commit(ops.setPositions(map, { [added[0].id]: spot }));
+  }, [map]);
 
   const actions: Actions = {
     setText: (id, text) => commit(ops.setText(mapRef.current, id, text)),
