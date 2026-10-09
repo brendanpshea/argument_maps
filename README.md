@@ -1,6 +1,6 @@
 # argument_maps
 
-A web app for practicing argument maps: premises, conclusions, linked vs.
+A web app for practicing argument (and explanation) maps: premises, conclusions, linked vs.
 convergent support, objections, and rebuttals. Students read a passage, build
 a map, check it against a model answer, and get feedback. Everything runs in
 the browser, with no server.
@@ -36,6 +36,8 @@ the browser, with no server.
    locked map.
 7. **Evaluate the reasoning**: for each support link, say whether it is
    deductive or inductive, then whether it is valid/invalid or strong/weak.
+8. **Explanations** work the same way: students find the explanandum (what
+   is being explained) and map what explains it with "explains" links.
 
 Students can also use an **outline view** to do everything with the keyboard,
 **download** their map as a PNG or as a map file they can load again later,

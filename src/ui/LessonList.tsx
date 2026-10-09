@@ -11,7 +11,7 @@ export function LessonList({ lessons, store, notFound }: Props) {
   return (
     <div className="lesson-list">
       <h1>Argument Maps</h1>
-      <p className="lede">Practice diagramming arguments: premises, conclusions, objections, and rebuttals.</p>
+      <p className="lede">Practice diagramming arguments (premises, conclusions, objections, and rebuttals) and explanations.</p>
       {notFound && <p className="message">That lesson could not be found.</p>}
       <ul>
         {lessons.map((lesson) => {
@@ -24,6 +24,7 @@ export function LessonList({ lessons, store, notFound }: Props) {
                 {lesson.description && <p>{lesson.description}</p>}
                 <span className="meta">
                   {lesson.steps.length} {lesson.steps.length === 1 ? 'step' : 'steps'}
+                  {lesson.kind === 'explanation' && ' · explanation'}
                   {lesson.claimMode === 'highlight' ? ' · find the claims yourself' : ' · numbered claims'}
                   {progress && ` · ${progress.completed ? 'completed' : `${done} of ${lesson.steps.length} checked`}`}
                 </span>

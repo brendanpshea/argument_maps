@@ -1,3 +1,4 @@
+import { vocab } from '../model/vocab';
 import type { GradeResult } from '../grading/grade';
 import type { ArgumentMap, Lesson } from '../model/types';
 
@@ -43,7 +44,7 @@ export function Feedback({ lesson, map, result, rewordStep, conclusionStep, eval
       {freeReword ? null : scored.length === 0 ? (
         <p className="all-correct">
           {conclusionStep
-            ? "Yes, that's the main conclusion."
+            ? `Yes, that's the ${vocab(lesson.kind).conclusion}.`
             : rewordStep
               ? 'All claims are clearly worded.'
               : evaluateStep

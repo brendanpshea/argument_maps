@@ -3,7 +3,8 @@ import { lessonFileSchema, type AnswerFile, type RelationTypeFile } from './sche
 import { parsePassage } from './passage';
 import { isBank, QUALITIES, type Answer, type Claim, type Lesson, type RelationType, type Step } from '../model/types';
 
-const relationType = (t: RelationTypeFile): RelationType => (t === 'support' ? 'support' : 'objection');
+const relationType = (t: RelationTypeFile): RelationType =>
+  t === 'support' ? 'support' : t === 'explanation' || t === 'explains' ? 'explanation' : 'objection';
 
 /** Parses and validates a lesson YAML file. Throws with a readable message on any problem. */
 export function compileLesson(yamlSource: string, fileName = 'lesson'): Lesson {
@@ -128,6 +129,15 @@ export function compileLesson(yamlSource: string, fileName = 'lesson'): Lesson {
       if (introduced > i) fail(`step ${i + 1} asks for the main conclusion, but "${a.conclusion}" only appears in step ${introduced + 1}`);
     }
   });
+  // Explanation lessons use only "explains" links; argument lessons never do.
+  const explanation = file.kind === 'explanation';
+  steps.forEach((step, i) => {
+    for (const r of [...step.answers.flatMap((a) => a.relations), ...step.mistakes.map((m) => m.relation)]) {
+      if (explanation && r.type !== 'explanation') fail(`step ${i + 1}: explanation lessons use \`type: explains\` links, not ${r.type}`);
+      if (!explanation && r.type === 'explanation') fail(`step ${i + 1}: \`explains\` links need \`kind: explanation\` on the lesson`);
+    }
+    if (explanation && step.task === 'evaluate') fail(`step ${i + 1}: evaluate steps (deductive/inductive) apply to arguments, not explanations`);
+  });
   // Each evaluated link must be a fixed-grouping support link in the answer being evaluated.
   steps.forEach((step, i) => {
     for (const e of step.evaluations) {
@@ -170,6 +180,7 @@ export function compileLesson(yamlSource: string, fileName = 'lesson'): Lesson {
     title: file.title,
     description: file.description?.trim(),
     claimMode: file.claimMode,
+    kind: file.kind,
     rewording: file.rewording,
     claims,
     equivalent,

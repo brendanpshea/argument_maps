@@ -27,7 +27,8 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { toPng } from 'html-to-image';
-import { QUALITIES, type ArgumentMap, type Evaluation, type InferenceQuality, type InferenceType, type MapRelation, type RelationType } from '../model/types';
+import { vocab } from '../model/vocab';
+import { QUALITIES, type LessonKind, type ArgumentMap, type Evaluation, type InferenceQuality, type InferenceType, type MapRelation, type RelationType } from '../model/types';
 import { autoLayout, CLAIM_SIZE, JUNCTION_SIZE } from '../model/layout';
 import * as ops from '../model/ops';
 import { download } from './exportMap';
@@ -44,6 +45,8 @@ type ClaimData = {
   label?: string;
   originalText: string;
   isConclusion: boolean;
+  /** "Main conclusion" or "Explanandum". */
+  conclusionLabel: string;
   readOnly: boolean;
   /** Structure is fixed (reword steps): only the wording can change. */
   locked: boolean;
@@ -59,6 +62,7 @@ type JunctionData = {
   evaluation?: Evaluation;
   /** Set in evaluate steps when this link is to be evaluated: what to ask. */
   evaluate?: 'type' | 'full';
+  kind: LessonKind;
 };
 type LinkEdgeT = Edge<{ readOnly: boolean; title: string }, 'link'>;
 type ClaimNodeT = Node<ClaimData, 'claim'>;
@@ -95,7 +99,7 @@ function ClaimNode({ id, data, selected }: NodeProps<ClaimNodeT>) {
       <SideHandles />
       <div className="claim-head">
         {data.label && <span className="claim-number">{data.label}</span>}
-        {data.isConclusion && <span className="conclusion-tag">Main conclusion</span>}
+        {data.isConclusion && <span className="conclusion-tag">{data.conclusionLabel}</span>}
         {data.tag && <span className="claim-tag">{data.tag}</span>}
         {reworded && <span className="reworded-tag" title={`Passage: “${data.originalText}”`}>reworded</span>}
         {!data.readOnly && (
@@ -103,7 +107,7 @@ function ClaimNode({ id, data, selected }: NodeProps<ClaimNodeT>) {
             {!data.locked && (
               <button
                 className="nodrag icon"
-                title={data.isConclusion ? 'Unmark main conclusion' : 'Mark as main conclusion'}
+                title={`${data.isConclusion ? 'Unmark' : 'Mark as'} ${data.conclusionLabel.toLowerCase()}`}
                 aria-pressed={data.isConclusion}
                 onClick={() => actions.toggleConclusion(id)}
               >
@@ -227,8 +231,8 @@ function JunctionNode({ id, data, selected }: NodeProps<JunctionNodeT>) {
         />
       )}
       {open && !data.evaluate && picking && (
-        <div className="link-menu nodrag" role="menu" aria-label="Link with another premise">
-          <p className="link-menu-title">Which premise works together with {data.premises > 1 ? 'these' : 'this one'}?</p>
+        <div className="link-menu nodrag" role="menu" aria-label={vocab(data.kind).linkWith}>
+          <p className="link-menu-title">{vocab(data.kind).linkWithQuestion(data.premises > 1)}</p>
           {data.candidates.map((c) => (
             <button key={c.id} role="menuitem" onClick={act(() => actions.linkPremise(id, c.id))}>
               {c.name}
@@ -243,17 +247,19 @@ function JunctionNode({ id, data, selected }: NodeProps<JunctionNodeT>) {
         <div className="link-menu nodrag" role="menu">
           {data.candidates.length > 0 && (
             <button role="menuitem" onClick={() => setPicking(true)}>
-              Link with another premise…
+              {vocab(data.kind).linkWith}
             </button>
           )}
           {data.premises > 1 && (
             <button role="menuitem" onClick={act(() => actions.split(id))}>
-              Split into independent reasons
+              {vocab(data.kind).split}
             </button>
           )}
-          <button role="menuitem" onClick={act(() => actions.toggleType(id))}>
-            Change to {data.type === 'support' ? 'objection' : 'support'}
-          </button>
+          {data.type !== 'explanation' && (
+            <button role="menuitem" onClick={act(() => actions.toggleType(id))}>
+              Change to {data.type === 'support' ? 'objection' : 'support'}
+            </button>
+          )}
           {data.premises === 1 && (
             <button role="menuitem" onClick={act(() => actions.reverse(id))}>
               Reverse direction
@@ -336,10 +342,12 @@ const truncate = (s: string, n = 48) => (s.length > n ? `${s.slice(0, n - 1).tri
 
 const nodeTypes = { claim: ClaimNode, junction: JunctionNode };
 const edgeTypes = { link: LinkEdge };
-const COLORS = { support: '#2f7d32', objection: '#c62828' };
+const COLORS = { support: '#2f7d32', objection: '#c62828', explanation: '#5b3fa8' };
 
 export interface MapEditorProps {
   map: ArgumentMap;
+  /** Argument or explanation lesson: sets link types and wording. */
+  kind?: LessonKind;
   onChange?: (map: ArgumentMap) => void;
   readOnly?: boolean;
   /** Reword steps: claims can be reworded and moved, but not added, removed, or relinked. */
@@ -376,6 +384,7 @@ function buildNodes(map: ArgumentMap, props: MapEditorProps, prev: Node[]): Node
           label: props.labelFor?.(n.id),
           originalText: props.originalTextFor(n.id),
           isConclusion: map.conclusion === n.id,
+          conclusionLabel: vocab(props.kind ?? 'argument').Conclusion,
           readOnly,
           locked,
         },
@@ -393,6 +402,7 @@ function buildNodes(map: ArgumentMap, props: MapEditorProps, prev: Node[]): Node
           premises: r.from.length,
           evaluation: r.evaluation,
           evaluate: props.evaluateFor?.(r.id) ?? undefined,
+          kind: props.kind ?? 'argument',
           candidates: map.nodes
             .filter((n) => n.id !== r.to && !r.from.includes(n.id))
             .map((n) => ({ id: n.id, name: [props.labelFor?.(n.id), truncate(n.text)].filter(Boolean).join(' ') })),
@@ -416,7 +426,7 @@ function junctionPosition(map: ArgumentMap, r: MapRelation): { x: number; y: num
   return { x: cx - JUNCTION_SIZE.width / 2, y: cy - JUNCTION_SIZE.height / 2 };
 }
 
-function buildEdges(map: ArgumentMap, prev: Edge[], readOnly: boolean): LinkEdgeT[] {
+function buildEdges(map: ArgumentMap, prev: Edge[], readOnly: boolean, kind: LessonKind): LinkEdgeT[] {
   const selected = new Set(prev.filter((e) => e.selected).map((e) => e.id));
   // Attach each line to the sides of the two boxes that face each other.
   const center = (id: string) => {
@@ -449,7 +459,7 @@ function buildEdges(map: ArgumentMap, prev: Edge[], readOnly: boolean): LinkEdge
         ...handles(f, r.id),
         style: { stroke },
         selected: selected.has(`p|${r.id}|${f}`),
-        data: { readOnly, title: linked ? 'Remove this premise from the link' : 'Delete this link' },
+        data: { readOnly, title: linked ? vocab(kind).removeFromLink : 'Delete this link' },
       })),
       {
         id: `o|${r.id}`,
@@ -514,13 +524,15 @@ function Editor(props: MapEditorProps) {
 
   const [nodes, setNodes] = useState<Node[]>([]);
   const [edges, setEdges] = useState<Edge[]>([]);
-  const [linkType, setLinkType] = useState<RelationType>('support');
+  const explanation = props.kind === 'explanation';
+  // Explanation lessons have only one kind of link.
+  const [linkType, setLinkType] = useState<RelationType>(explanation ? 'explanation' : 'support');
   const wrapper = useRef<HTMLDivElement>(null);
   const flow = useReactFlow();
 
   useEffect(() => {
     setNodes((prev) => buildNodes(map, props, prev));
-    setEdges((prev) => buildEdges(map, prev, !!fixed));
+    setEdges((prev) => buildEdges(map, prev, !!fixed, props.kind ?? 'argument'));
   }, [map, readOnly, locked]);
 
   // A claim just added from the passage or the claim bank gets a default spot that may be
@@ -654,7 +666,7 @@ function Editor(props: MapEditorProps) {
           <Background gap={20} />
           <Controls showInteractive={false} />
           <Panel position="top-left" className="map-toolbar">
-            {!fixed && (
+            {!fixed && !explanation && (
               <div className="segmented" role="radiogroup" aria-label="Type of new links">
                 <span>New links:</span>
                 <button role="radio" aria-checked={linkType === 'support'} className={linkType === 'support' ? 'on support' : ''} onClick={() => setLinkType('support')}>

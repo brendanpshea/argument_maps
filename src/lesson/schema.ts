@@ -8,7 +8,7 @@ import { z } from 'zod';
 const claimId = z.string().regex(/^[A-Za-z][\w-]*$/, 'claim ids must start with a letter');
 
 /** `objection` and `rebuttal` are the same relation (an attack); authors may use either word. */
-export const relationTypeSchema = z.enum(['support', 'objection', 'rebuttal']);
+export const relationTypeSchema = z.enum(['support', 'objection', 'rebuttal', 'explanation', 'explains']);
 
 const qualitySchema = z.enum(['valid', 'invalid', 'strong', 'weak']);
 
@@ -30,10 +30,15 @@ const mistakeRelationSchema = z.object({
   to: claimId,
 });
 
-export const answerSchema = z.object({
-  conclusion: claimId,
-  relations: z.array(answerRelationSchema),
-});
+export const answerSchema = z
+  .object({
+    conclusion: claimId.optional(),
+    /** Explanation lessons may say `explanandum` instead of `conclusion`. */
+    explanandum: claimId.optional(),
+    relations: z.array(answerRelationSchema),
+  })
+  .refine((a) => !!a.conclusion !== !!a.explanandum, 'give exactly one of `conclusion` or `explanandum`')
+  .transform(({ conclusion, explanandum, relations }) => ({ conclusion: (conclusion ?? explanandum)!, relations }));
 
 export const mistakeSchema = z.object({
   /** Shown when the student's map contains exactly this relation. */
@@ -86,6 +91,8 @@ export const lessonFileSchema = z.object({
    * `highlight`: the passage is plain text; students select the claims themselves.
    */
   claimMode: z.enum(['marked', 'highlight']).default('marked'),
+  /** `argument` (the default) or `explanation`: links read "explains", the conclusion is the explanandum. */
+  kind: z.enum(['argument', 'explanation']).default('argument'),
   /**
    * How students may restate claims on their map:
    * `none` (passage wording only), `free` (type freely; not scored),

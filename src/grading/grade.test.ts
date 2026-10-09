@@ -514,3 +514,44 @@ ${evaluations}
     expect(() => compileLesson(yaml(`      - { link: { from: [b], to: c }, type: inductive }`))).toThrow(/needs a fixed grouping|evaluated links need a fixed grouping/);
   });
 });
+
+describe('explanation lessons', () => {
+  const leaves = load('autumn-leaves.yaml');
+
+  it('compiles with explains links and an explanandum', () => {
+    expect(leaves.kind).toBe('explanation');
+    expect(leaves.steps[1].answers[0].conclusion).toBe('e');
+    expect(leaves.steps[1].answers[0].relations.every((r) => r.type === 'explanation')).toBe(true);
+  });
+
+  it('uses explanation wording in feedback', () => {
+    const pickBackground = gradeStep(leaves, 0, {
+      nodes: [{ id: 'n', text: '', source: leaves.claims.x1.source, position: { x: 0, y: 0 } }],
+      relations: [],
+      conclusion: 'n',
+    });
+    expect(pickBackground.items[0].message).toMatch(/part of the explanation. What does it help explain/);
+    const empty = gradeStep(leaves, 1, { nodes: [], relations: [] });
+    expect(empty.items[0].message).toMatch(/explanandum \(what is being explained\)/);
+  });
+
+  it('rejects mixing argument and explanation links', () => {
+    const lesson = (kind: string, type: string) => `
+id: k
+title: K
+kind: ${kind}
+steps:
+  - instructions: s
+    passage: "{{a|A}} so {{b|B}}"
+    answer: { conclusion: b, relations: [{ type: ${type}, from: [a], to: b }] }
+`;
+    expect(() => compileLesson(lesson('explanation', 'support'))).toThrow(/explanation lessons use/);
+    expect(() => compileLesson(lesson('argument', 'explains'))).toThrow(/need `kind: explanation`/);
+    expect(() =>
+      compileLesson(
+        lesson('explanation', 'explains') +
+          `  - task: evaluate\n    instructions: e\n    evaluations: [{ link: { from: [a], to: b }, type: inductive }]\n`,
+      ),
+    ).toThrow(/apply to arguments, not explanations/);
+  });
+});
