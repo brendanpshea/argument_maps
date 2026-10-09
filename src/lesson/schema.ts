@@ -41,11 +41,20 @@ export const mistakeSchema = z.object({
 
 export const stepSchema = z.object({
   title: z.string().optional(),
+  /**
+   * What the student does in this step:
+   * `conclusion`: pick the main conclusion (answer taken from the next structure step);
+   * `structure`: build the map (the default);
+   * `reword`: restate the claims on the finished map (answer taken from the previous structure step).
+   */
+  task: z.enum(['conclusion', 'structure', 'reword']).default('structure'),
   instructions: z.string(),
-  /** Text added to the passage at this step. Claims are marked `{{id|text}}`. */
-  passage: z.string(),
-  /** The full model map after this step (cumulative, not a diff). */
-  answer: answerSchema,
+  /** Text added to the passage at this step, if any. Claims are marked `{{id|text}}`. */
+  passage: z.string().default(''),
+  /** The full model map after this step (cumulative, not a diff). Structure steps only. */
+  answer: answerSchema.optional(),
+  /** Conclusion steps: a hint to show when a student picks this claim, overriding the automatic one. */
+  conclusionHints: z.record(z.string(), z.string()).optional(),
   /** Other maps that also earn full credit; the best-scoring one is used. */
   alternatives: z.array(answerSchema).optional(),
   mistakes: z.array(mistakeSchema).optional(),

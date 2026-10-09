@@ -45,6 +45,8 @@ type ClaimData = {
   originalText: string;
   isConclusion: boolean;
   readOnly: boolean;
+  /** Structure is fixed (reword steps): only the wording can change. */
+  locked: boolean;
 };
 type JunctionData = {
   type: RelationType;
@@ -93,14 +95,16 @@ function ClaimNode({ id, data, selected }: NodeProps<ClaimNodeT>) {
         {reworded && <span className="reworded-tag" title={`Passage: “${data.originalText}”`}>reworded</span>}
         {!data.readOnly && (
           <span className="node-tools">
-            <button
-              className="nodrag icon"
-              title={data.isConclusion ? 'Unmark main conclusion' : 'Mark as main conclusion'}
-              aria-pressed={data.isConclusion}
-              onClick={() => actions.toggleConclusion(id)}
-            >
-              ★
-            </button>
+            {!data.locked && (
+              <button
+                className="nodrag icon"
+                title={data.isConclusion ? 'Unmark main conclusion' : 'Mark as main conclusion'}
+                aria-pressed={data.isConclusion}
+                onClick={() => actions.toggleConclusion(id)}
+              >
+                ★
+              </button>
+            )}
             {data.edit.kind !== 'none' && (
               <button
                 className="nodrag icon"
@@ -111,9 +115,11 @@ function ClaimNode({ id, data, selected }: NodeProps<ClaimNodeT>) {
                 ✎
               </button>
             )}
-            <button className="nodrag icon" title="Remove from map" onClick={() => actions.removeNode(id)}>
-              ×
-            </button>
+            {!data.locked && (
+              <button className="nodrag icon" title="Remove from map" onClick={() => actions.removeNode(id)}>
+                ×
+              </button>
+            )}
           </span>
         )}
       </div>
@@ -274,6 +280,8 @@ export interface MapEditorProps {
   map: ArgumentMap;
   onChange?: (map: ArgumentMap) => void;
   readOnly?: boolean;
+  /** Reword steps: claims can be reworded and moved, but not added, removed, or relinked. */
+  locked?: boolean;
   /** Claim-number label for a node, if the lesson numbers its claims. */
   labelFor?: (nodeId: string) => string | undefined;
   originalTextFor: (nodeId: string) => string;
@@ -289,6 +297,7 @@ function buildNodes(map: ArgumentMap, props: MapEditorProps, prev: Node[]): Node
     return o ? { measured: o.measured, selected: o.selected } : {};
   };
   const readOnly = !!props.readOnly;
+  const locked = !!props.locked;
   return [
     ...map.nodes.map(
       (n): ClaimNodeT => ({
@@ -304,6 +313,7 @@ function buildNodes(map: ArgumentMap, props: MapEditorProps, prev: Node[]): Node
           originalText: props.originalTextFor(n.id),
           isConclusion: map.conclusion === n.id,
           readOnly,
+          locked,
         },
       }),
     ),
@@ -320,7 +330,7 @@ function buildNodes(map: ArgumentMap, props: MapEditorProps, prev: Node[]): Node
           candidates: map.nodes
             .filter((n) => n.id !== r.to && !r.from.includes(n.id))
             .map((n) => ({ id: n.id, name: [props.labelFor?.(n.id), truncate(n.text)].filter(Boolean).join(' ') })),
-          readOnly,
+          readOnly: readOnly || locked,
         },
       };
     }),
@@ -429,7 +439,9 @@ function removeEdgeFromMap(map: ArgumentMap, edgeId: string): ArgumentMap {
 }
 
 function Editor(props: MapEditorProps) {
-  const { map, readOnly } = props;
+  const { map, readOnly, locked } = props;
+  /** No structural edits: read-only (model answer) or locked (reword step). */
+  const fixed = readOnly || locked;
   const mapRef = useRef(map);
   mapRef.current = map;
   const commit = useCallback((next: ArgumentMap) => props.onChange?.(next), [props.onChange]);
@@ -442,8 +454,8 @@ function Editor(props: MapEditorProps) {
 
   useEffect(() => {
     setNodes((prev) => buildNodes(map, props, prev));
-    setEdges((prev) => buildEdges(map, prev, !!readOnly));
-  }, [map, readOnly]);
+    setEdges((prev) => buildEdges(map, prev, !!fixed));
+  }, [map, readOnly, locked]);
 
   // A claim just added from the passage or the claim bank gets a default spot that may be
   // off screen (after panning or zooming, or on a small screen). Move it to a free spot in view.
@@ -557,15 +569,15 @@ function Editor(props: MapEditorProps) {
           edgeTypes={edgeTypes}
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
-          onConnect={readOnly ? undefined : onConnect}
+          onConnect={fixed ? undefined : onConnect}
           onConnectStart={(_, { nodeId }) => (dragStart.current = nodeId)}
           onConnectEnd={() => setTimeout(() => (dragStart.current = null))}
           connectionMode={ConnectionMode.Loose}
-          onDelete={readOnly ? undefined : onDelete}
+          onDelete={fixed ? undefined : onDelete}
           nodesDraggable={!readOnly}
-          nodesConnectable={!readOnly}
+          nodesConnectable={!fixed}
           elementsSelectable={!readOnly}
-          deleteKeyCode={readOnly ? null : ['Backspace', 'Delete']}
+          deleteKeyCode={fixed ? null : ['Backspace', 'Delete']}
           connectionRadius={40}
           fitView
           fitViewOptions={{ padding: 0.15, maxZoom: 1 }}
@@ -575,7 +587,7 @@ function Editor(props: MapEditorProps) {
           <Background gap={20} />
           <Controls showInteractive={false} />
           <Panel position="top-left" className="map-toolbar">
-            {!readOnly && (
+            {!fixed && (
               <div className="segmented" role="radiogroup" aria-label="Type of new links">
                 <span>New links:</span>
                 <button role="radio" aria-checked={linkType === 'support'} className={linkType === 'support' ? 'on support' : ''} onClick={() => setLinkType('support')}>

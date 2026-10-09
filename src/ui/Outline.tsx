@@ -8,6 +8,8 @@ interface Props {
   onChange: (map: ArgumentMap) => void;
   nameFor: (nodeId: string) => string;
   editFor: (nodeId: string) => WordingEdit;
+  /** Reword steps: the structure is fixed; only wording can change. */
+  locked?: boolean;
 }
 
 function ClaimWording({ node, edit, label, onChange }: { node: MapNode; edit: WordingEdit; label: string; onChange: (text: string) => void }) {
@@ -43,7 +45,7 @@ function ClaimWording({ node, edit, label, onChange }: { node: MapNode; edit: Wo
  * A keyboard- and screen-reader-friendly way to build the same map as the
  * drag-and-drop canvas.
  */
-export function Outline({ map, onChange, nameFor, editFor }: Props) {
+export function Outline({ map, onChange, nameFor, editFor, locked }: Props) {
   const [premises, setPremises] = useState<string[]>([]);
   const [target, setTarget] = useState('');
   const [type, setType] = useState<RelationType>('support');
@@ -62,10 +64,14 @@ export function Outline({ map, onChange, nameFor, editFor }: Props) {
         {map.nodes.map((n) => (
           <li key={n.id}>
             <ClaimWording node={n} edit={editFor(n.id)} label={`Wording of claim ${nameFor(n.id)}`} onChange={(text) => onChange(ops.setText(map, n.id, text))} />
-            <label>
-              <input type="radio" name="conclusion" checked={map.conclusion === n.id} onChange={() => onChange({ ...map, conclusion: n.id })} /> Main conclusion
-            </label>
-            <button onClick={() => onChange(ops.removeNode(map, n.id))}>Remove</button>
+            {!locked && (
+              <>
+                <label>
+                  <input type="radio" name="conclusion" checked={map.conclusion === n.id} onChange={() => onChange({ ...map, conclusion: n.id })} /> Main conclusion
+                </label>
+                <button onClick={() => onChange(ops.removeNode(map, n.id))}>Remove</button>
+              </>
+            )}
           </li>
         ))}
       </ul>
@@ -78,6 +84,8 @@ export function Outline({ map, onChange, nameFor, editFor }: Props) {
             <span>
               {r.from.map(nameFor).join(' + ')} <strong className={r.type}>{ops.relationLabel(map, r.id)}</strong> {nameFor(r.to)}
             </span>
+            {!locked && (
+              <>
             <button onClick={() => onChange(ops.toggleRelationType(map, r.id))}>Switch type</button>
             {r.from.length === 1 && <button onClick={() => onChange(ops.reverseRelation(map, r.id))}>Reverse</button>}
             {r.from.length > 1 && <button onClick={() => onChange(ops.splitRelation(map, r.id))}>Split</button>}
@@ -96,11 +104,13 @@ export function Outline({ map, onChange, nameFor, editFor }: Props) {
                 ))}
             </select>
             <button onClick={() => onChange(ops.removeRelation(map, r.id))}>Remove</button>
+              </>
+            )}
           </li>
         ))}
       </ul>
 
-      {map.nodes.length >= 2 && (
+      {!locked && map.nodes.length >= 2 && (
         <fieldset className="add-link">
           <legend>Add a link</legend>
           <div>

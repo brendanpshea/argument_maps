@@ -112,7 +112,7 @@ describe('gradeStep', () => {
       ],
       conclusion: 'c1',
     };
-    const result = gradeStep(zoos, 0, map);
+    const result = gradeStep(zoos, 1, map);
     const partial = result.items.filter((i) => i.status === 'partial');
     expect(partial).toHaveLength(1);
     expect(partial[0].message).toMatch(/work together/);
@@ -127,7 +127,7 @@ describe('gradeStep', () => {
       ],
       conclusion: 'c1',
     };
-    const messages = gradeStep(zoos, 0, map).items.map((i) => i.message);
+    const messages = gradeStep(zoos, 1, map).items.map((i) => i.message);
     expect(messages.some((m) => m.includes('responding to something else'))).toBe(true);
   });
 
@@ -146,7 +146,7 @@ describe('gradeStep', () => {
       relations: [],
       conclusion: 'n1',
     };
-    const result = gradeStep(zoos, 0, map);
+    const result = gradeStep(zoos, 1, map);
     expect(result.mapping.n1).toBe('c1');
     expect(result.items[0].status).toBe('correct');
   });
@@ -156,13 +156,13 @@ describe('gradeStep', () => {
     const at = (start: number, end: number): MapNode => ({ id: 'n', text: '', source: { ...c3.source, start, end }, position: { x: 0, y: 0 } });
     const core = at(c3.source.start, c3.source.start + 'they show stress behaviors like pacing and swaying'.length);
     const fragment = at(c3.source.start, c3.source.start + 'they show'.length);
-    expect(gradeStep(zoos, 0, { nodes: [core], relations: [] }).mapping.n).toBe('c3');
-    expect(gradeStep(zoos, 0, { nodes: [fragment], relations: [] }).mapping.n).toBeUndefined();
+    expect(gradeStep(zoos, 1, { nodes: [core], relations: [] }).mapping.n).toBe('c3');
+    expect(gradeStep(zoos, 1, { nodes: [fragment], relations: [] }).mapping.n).toBeUndefined();
   });
 
   it('notes claims that are not part of the argument', () => {
     const map: ArgumentMap = { nodes: [node('x1')], relations: [] };
-    const notes = gradeStep(zoos, 0, map).items.filter((i) => i.status === 'note');
+    const notes = gradeStep(zoos, 1, map).items.filter((i) => i.status === 'note');
     expect(notes[0].message).toMatch(/isn't part of the argument/);
   });
 
@@ -367,5 +367,67 @@ steps:
 `;
     expect(() => compileLesson(bad('[[a, zz]]'))).toThrow(/"zz"/);
     expect(() => compileLesson(bad('[[a, b], [b, c]]'))).toThrow(/more than one equivalent set/);
+  });
+});
+
+describe('step tasks', () => {
+  const zoos = load('zoos.yaml');
+  const pick = (claimId: string): ArgumentMap => {
+    const c = zoos.claims[claimId];
+    return { nodes: [{ id: 'n', text: c.passageText, source: c.source, position: { x: 0, y: 0 } }], relations: [], conclusion: 'n' };
+  };
+  const conclusionFeedback = (claimId: string) => {
+    const r = gradeStep(zoos, 0, pick(claimId));
+    return { score: r.earned / r.possible, message: r.items[0].message };
+  };
+
+  it('conclusion steps accept the main conclusion', () => {
+    expect(conclusionFeedback('c1').score).toBe(1);
+  });
+
+  it('conclusion steps give a hint matched to the role of a wrong pick', () => {
+    expect(conclusionFeedback('c3').message).toMatch(/offered as a reason/); // plain premise
+    expect(conclusionFeedback('c2').message).toMatch(/in turn supports another claim/); // intermediate conclusion
+    expect(conclusionFeedback('c6').message).toMatch(/view the author is responding to/); // objection
+    expect(conclusionFeedback('c7').message).toMatch(/answers an objection/); // rebuttal
+    expect(conclusionFeedback('x1').message).toMatch(/setting the scene/); // author's custom hint
+    for (const id of ['c2', 'c3', 'c6', 'c7', 'x1']) expect(conclusionFeedback(id).score).toBe(0);
+  });
+
+  it('structure steps do not score wording when the lesson has a reword step', () => {
+    const model = mapFromAnswer(zoos, zoos.steps[1].answers[0]);
+    const asWritten = { ...model, nodes: model.nodes.map((n) => ({ ...n, text: zoos.claims[n.id.slice(2)].passageText })) };
+    const r = gradeStep(zoos, 1, asWritten);
+    expect(r.earned).toBe(r.possible);
+  });
+
+  it('reword steps score only wording', () => {
+    const model = mapFromAnswer(zoos, zoos.steps[2].answers[0]);
+    const withText = (claimId: string, text: string) => ({ ...model, nodes: model.nodes.map((n) => (n.id === `n-${claimId}` ? { ...n, text } : n)) });
+    expect(gradeStep(zoos, 2, model).earned).toBe(3);
+    const flawed = zoos.claims.c3.wordingChoices![1];
+    const r = gradeStep(zoos, 2, withText('c3', flawed.text));
+    expect(r.items.find((i) => i.status === 'wrong')?.message).toContain(flawed.why);
+    expect(r.items.every((i) => !/link|conclusion/i.test(i.message))).toBe(true);
+  });
+
+  it('rejects misplaced or incomplete task steps', () => {
+    const lesson = (steps: string, extra = '') => `
+id: t
+title: T
+${extra}
+steps:
+${steps}
+`;
+    const structure = `  - instructions: s
+    passage: "{{a|A}} so {{b|B}}"
+    answer: { conclusion: b, relations: [{ type: support, from: [a], to: b }] }`;
+    expect(() => compileLesson(lesson(`  - task: conclusion\n    instructions: c\n    passage: "{{a|A}}"`))).toThrow(/no structure step after/);
+    expect(() => compileLesson(lesson(`  - task: reword\n    instructions: r\n${structure}`))).toThrow(/no structure step before/);
+    expect(() =>
+      compileLesson(lesson(`  - task: conclusion\n    instructions: c\n    answer: { conclusion: b, relations: [] }\n${structure}`)),
+    ).toThrow(/takes its answer from a structure step/);
+    expect(() => compileLesson(lesson(`${structure}\n  - task: reword\n    instructions: r`, 'rewording: none'))).toThrow(/reword step needs/);
+    expect(() => compileLesson(lesson(`  - task: conclusion\n    instructions: c\n${structure}`))).toThrow(/only appears in step 2/);
   });
 });
