@@ -13,6 +13,9 @@ export function LessonList({ lessons, store, notFound }: Props) {
       <h1>Argument Maps</h1>
       <p className="lede">Practice diagramming arguments (premises, conclusions, objections, and rebuttals) and explanations.</p>
       {notFound && <p className="message">That lesson could not be found.</p>}
+      <p>
+        <a href="slides.html">Slide decks for teaching →</a>
+      </p>
       <ul>
         {lessons.map((lesson) => {
           const progress = store.load(lesson.id);

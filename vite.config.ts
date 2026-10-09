@@ -7,7 +7,11 @@ import react from '@vitejs/plugin-react';
 export default defineConfig({
   base: './',
   plugins: [react()],
-  build: { chunkSizeWarningLimit: 1000 },
+  build: {
+    chunkSizeWarningLimit: 1000,
+    // Two pages: the practice app and the slide decks.
+    rollupOptions: { input: { main: 'index.html', slides: 'slides.html' } },
+  },
   test: {
     environment: 'node',
   },
