@@ -1,0 +1,29 @@
+/* Diagrams on slides */
+.reveal figure.argmap { position: relative; margin: 0.4em auto; display: block; }
+/* Scale diagrams up to fill the slide (at most 1.8x, and no taller than 540px). */
+.reveal figure.argmap svg { display: block; margin: 0 auto; height: auto; width: min(100%, calc(var(--w) * 1.8px)); max-height: 540px; }
+.reveal .argmap-download {
+  position: absolute; right: 0; bottom: -1.6em; font-size: 14px; opacity: 0; transition: opacity 0.2s;
+  color: #1d5fa8; text-decoration: none; border: 1px solid #d5d3cc; border-radius: 4px; padding: 0 6px; background: #fff;
+}
+.reveal figure.argmap:hover .argmap-download { opacity: 1; }
+@media print { .reveal .argmap-download { display: none; } }
+.reveal .argmap-error { text-align: left; font-size: 18px; color: #c62828; border: 2px solid #c62828; border-radius: 8px; padding: 0.5em 1em; }
+.reveal .argmap-error ul { margin: 0.3em 0 0 1em; }
+/* Fragments inside SVG: reveal toggles .visible; give them the same fade. */
+.reveal svg .fragment { transition: opacity 0.3s ease; }
+
+/* Deck list */
+body.deck-index { font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; background: #f7f6f2; color: #1f2328; margin: 0; }
+.deck-list { max-width: 760px; margin: 0 auto; padding: 2rem 16px; line-height: 1.5; }
+.deck-list ul { list-style: none; padding: 0; display: grid; gap: 1rem; }
+.deck-list li a { display: block; padding: 1rem 1.25rem; background: #fff; border: 1px solid #d5d3cc; border-radius: 10px; color: inherit; text-decoration: none; }
+.deck-list li a:hover { border-color: #1d5fa8; }
+.deck-list h2 { margin: 0 0 0.25rem; font-size: 1.15rem; color: #1d5fa8; }
+.deck-list span, .deck-list .hint { color: #5f6670; font-size: 0.9rem; }
+.deck-list a { color: #1d5fa8; }
+
+/* reveal.js fills its container; give the container the whole window. */
+html, body { margin: 0; }
+body:not(.deck-index), body:not(.deck-index) #root { height: 100%; }
+html:has(body:not(.deck-index)) { height: 100%; }

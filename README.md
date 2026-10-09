@@ -43,6 +43,13 @@ Students can also use an **outline view** to do everything with the keyboard,
 **download** their map as a PNG or as a map file they can load again later,
 and pick up where they left off (work is saved in the browser).
 
+## Slide decks for teaching
+
+`slides.html` presents reveal.js slide decks written in Markdown, with
+argument and explanation diagrams in `argmap` code blocks (or pulled from a
+lesson's model answer). Diagrams can build up one click at a time, and every
+diagram is also exported as a PNG. See [`decks/README.md`](decks/README.md).
+
 ## Writing lessons
 
 Lessons are YAML files in [`lessons/`](lessons/). See
@@ -70,6 +77,9 @@ Pushing to `main` runs the tests, builds, and deploys to GitHub Pages
 | `src/model/` | Map types, editing operations, auto-layout |
 | `src/storage/` | `ProgressStore` interface (localStorage now, SCORM later) |
 | `src/ui/` | React components; the canvas uses React Flow |
+| `src/diagram/` | `argmap` syntax, static SVG renderer, deck builder |
+| `src/slides/` | The reveal.js slides page |
+| `scripts/export-diagrams.ts` | Renders every deck diagram to PNG at build time |
 
 ## Roadmap
 
