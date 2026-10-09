@@ -86,6 +86,12 @@ export function setPositions(map: ArgumentMap, positions: Record<string, { x: nu
   };
 }
 
+/** Swaps premise and target of a single-premise relation. */
+export const reverseRelation = (map: ArgumentMap, relationId: string): ArgumentMap => ({
+  ...map,
+  relations: map.relations.map((r) => (r.id === relationId && r.from.length === 1 ? { ...r, from: [r.to], to: r.from[0] } : r)),
+});
+
 /** "supports", "objects to", or "rebuts" (an objection aimed at an objection). */
 export function relationLabel(map: ArgumentMap, relationId: string): string {
   const r = map.relations.find((x) => x.id === relationId);

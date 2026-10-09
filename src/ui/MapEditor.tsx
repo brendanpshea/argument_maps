@@ -1,7 +1,9 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import {
   Background,
+  BaseEdge,
   Controls,
+  EdgeLabelRenderer,
   Handle,
   MarkerType,
   Panel,
@@ -10,12 +12,14 @@ import {
   ReactFlowProvider,
   applyEdgeChanges,
   applyNodeChanges,
+  getBezierPath,
   getNodesBounds,
   getViewportForBounds,
   useReactFlow,
   type Connection,
   type Edge,
   type EdgeChange,
+  type EdgeProps,
   type Node,
   type NodeChange,
   type NodeProps,
@@ -41,7 +45,8 @@ type ClaimData = {
   isConclusion: boolean;
   readOnly: boolean;
 };
-type JunctionData = { type: RelationType; label: string; readOnly: boolean };
+type JunctionData = { type: RelationType; label: string; premises: number; readOnly: boolean };
+type LinkEdgeT = Edge<{ readOnly: boolean; title: string }, 'link'>;
 type ClaimNodeT = Node<ClaimData, 'claim'>;
 type JunctionNodeT = Node<JunctionData, 'junction'>;
 
@@ -50,6 +55,9 @@ interface Actions {
   toggleConclusion(id: string): void;
   removeNode(id: string): void;
   toggleType(relationId: string): void;
+  reverse(relationId: string): void;
+  removeRelation(relationId: string): void;
+  removeEdge(edgeId: string): void;
 }
 const ActionsContext = createContext<Actions | null>(null);
 
@@ -142,25 +150,75 @@ function ClaimNode({ id, data, selected }: NodeProps<ClaimNodeT>) {
   );
 }
 
-function JunctionNode({ id, data }: NodeProps<JunctionNodeT>) {
+function JunctionNode({ id, data, selected }: NodeProps<JunctionNodeT>) {
   const actions = useContext(ActionsContext)!;
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (!selected) setOpen(false);
+  }, [selected]);
+  const act = (fn: () => void) => () => {
+    setOpen(false);
+    fn();
+  };
   return (
     <div className={`junction junction-${data.type}`}>
       <Handle type="target" position={Position.Bottom} />
       <button
         className="nodrag"
         disabled={data.readOnly}
-        title={data.readOnly ? undefined : 'Click to switch between support and objection'}
-        onClick={() => actions.toggleType(id)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        title={data.readOnly ? undefined : 'Change or delete this link'}
+        onClick={() => setOpen(!open)}
       >
         {data.label}
       </button>
+      {open && (
+        <div className="link-menu nodrag" role="menu">
+          <button role="menuitem" onClick={act(() => actions.toggleType(id))}>
+            Change to {data.type === 'support' ? 'objection' : 'support'}
+          </button>
+          {data.premises === 1 && (
+            <button role="menuitem" onClick={act(() => actions.reverse(id))}>
+              Reverse direction
+            </button>
+          )}
+          <button role="menuitem" className="danger" onClick={act(() => actions.removeRelation(id))}>
+            Delete link
+          </button>
+        </div>
+      )}
       <Handle type="source" position={Position.Top} />
     </div>
   );
 }
 
+/** A link line. When selected, shows a button to remove it. */
+function LinkEdge({ id, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, style, markerEnd, selected, data }: EdgeProps<LinkEdgeT>) {
+  const actions = useContext(ActionsContext)!;
+  const [path, labelX, labelY] = getBezierPath({ sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition });
+  return (
+    <>
+      <BaseEdge id={id} path={path} style={{ ...style, strokeWidth: selected ? 4 : 2 }} markerEnd={markerEnd} interactionWidth={24} />
+      {selected && !data?.readOnly && (
+        <EdgeLabelRenderer>
+          <button
+            className="edge-delete nodrag nopan"
+            style={{ transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)` }}
+            title={data?.title}
+            aria-label={data?.title}
+            onClick={() => actions.removeEdge(id)}
+          >
+            ×
+          </button>
+        </EdgeLabelRenderer>
+      )}
+    </>
+  );
+}
+
 const nodeTypes = { claim: ClaimNode, junction: JunctionNode };
+const edgeTypes = { link: LinkEdge };
 const COLORS = { support: '#2f7d32', objection: '#c62828' };
 
 export interface MapEditorProps {
@@ -208,34 +266,45 @@ function buildNodes(map: ArgumentMap, props: MapEditorProps, prev: Node[]): Node
         type: 'junction',
         position: r.position ?? fallback,
         ...keep(r.id),
-        data: { type: r.type, label: ops.relationLabel(map, r.id), readOnly },
+        data: { type: r.type, label: ops.relationLabel(map, r.id), premises: r.from.length, readOnly },
       };
     }),
   ];
 }
 
-function buildEdges(map: ArgumentMap, prev: Edge[]): Edge[] {
+function buildEdges(map: ArgumentMap, prev: Edge[], readOnly: boolean): LinkEdgeT[] {
   const selected = new Set(prev.filter((e) => e.selected).map((e) => e.id));
-  return map.relations.flatMap((r) => {
+  return map.relations.flatMap((r): LinkEdgeT[] => {
     const stroke = COLORS[r.type];
+    const linked = r.from.length > 1;
     return [
-      ...r.from.map((f) => ({
+      ...r.from.map((f): LinkEdgeT => ({
         id: `p|${r.id}|${f}`,
+        type: 'link',
         source: f,
         target: r.id,
-        style: { stroke, strokeWidth: 2 },
+        style: { stroke },
         selected: selected.has(`p|${r.id}|${f}`),
+        data: { readOnly, title: linked ? 'Remove this premise from the link' : 'Delete this link' },
       })),
       {
         id: `o|${r.id}`,
+        type: 'link',
         source: r.id,
         target: r.to,
-        style: { stroke, strokeWidth: 2 },
+        style: { stroke },
         markerEnd: { type: MarkerType.ArrowClosed, color: stroke },
         selected: selected.has(`o|${r.id}`),
+        data: { readOnly, title: 'Delete this link' },
       },
     ];
   });
+}
+
+/** Applies the deletion of one edge: a premise line removes that premise; the arrow removes the whole link. */
+function removeEdgeFromMap(map: ArgumentMap, edgeId: string): ArgumentMap {
+  const [kind, relId, nodeId] = edgeId.split('|');
+  return kind === 'p' ? ops.removePremise(map, relId, nodeId) : ops.removeRelation(map, relId);
 }
 
 function Editor(props: MapEditorProps) {
@@ -252,7 +321,7 @@ function Editor(props: MapEditorProps) {
 
   useEffect(() => {
     setNodes((prev) => buildNodes(map, props, prev));
-    setEdges((prev) => buildEdges(map, prev));
+    setEdges((prev) => buildEdges(map, prev, !!readOnly));
   }, [map, readOnly]);
 
   const actions: Actions = {
@@ -260,6 +329,17 @@ function Editor(props: MapEditorProps) {
     toggleConclusion: (id) => commit(ops.toggleConclusion(mapRef.current, id)),
     removeNode: (id) => commit(ops.removeNode(mapRef.current, id)),
     toggleType: (id) => commit(ops.toggleRelationType(mapRef.current, id)),
+    reverse: (id) => {
+      // Swap the two claims' positions too, so the arrow still points the way the layout flows.
+      const current = mapRef.current;
+      const r = current.relations.find((x) => x.id === id);
+      const a = current.nodes.find((n) => n.id === r?.from[0]);
+      const b = current.nodes.find((n) => n.id === r?.to);
+      const swapped = a && b ? ops.setPositions(current, { [a.id]: b.position, [b.id]: a.position }) : current;
+      commit(ops.reverseRelation(swapped, id));
+    },
+    removeRelation: (id) => commit(ops.removeRelation(mapRef.current, id)),
+    removeEdge: (id) => commit(removeEdgeFromMap(mapRef.current, id)),
   };
 
   const onNodesChange = (changes: NodeChange[]) => {
@@ -290,10 +370,7 @@ function Editor(props: MapEditorProps) {
   const onDelete = ({ nodes: dn, edges: de }: { nodes: Node[]; edges: Edge[] }) => {
     let next = mapRef.current;
     for (const n of dn) next = n.type === 'junction' ? ops.removeRelation(next, n.id) : ops.removeNode(next, n.id);
-    for (const e of de) {
-      const [kind, relId, nodeId] = e.id.split('|');
-      next = kind === 'p' ? ops.removePremise(next, relId, nodeId) : ops.removeRelation(next, relId);
-    }
+    for (const e of de) next = removeEdgeFromMap(next, e.id);
     commit(next);
   };
 
@@ -327,6 +404,7 @@ function Editor(props: MapEditorProps) {
           nodes={nodes}
           edges={edges}
           nodeTypes={nodeTypes}
+          edgeTypes={edgeTypes}
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={readOnly ? undefined : onConnect}

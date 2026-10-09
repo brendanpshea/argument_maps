@@ -194,3 +194,19 @@ steps:
     expect(() => compileLesson(yaml)).toThrow(/rewording: choose/);
   });
 });
+
+describe('map editing', () => {
+  it('reverses single-premise links only', async () => {
+    const ops = await import('../model/ops');
+    const map: ArgumentMap = {
+      nodes: [],
+      relations: [
+        { id: 'r1', type: 'support', from: ['a'], to: 'b' },
+        { id: 'r2', type: 'support', from: ['c', 'd'], to: 'b' },
+      ],
+    };
+    const next = ops.reverseRelation(ops.reverseRelation(map, 'r1'), 'r2');
+    expect(next.relations[0]).toMatchObject({ from: ['b'], to: 'a' });
+    expect(next.relations[1]).toMatchObject({ from: ['c', 'd'], to: 'b' });
+  });
+});

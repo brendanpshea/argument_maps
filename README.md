@@ -18,8 +18,10 @@ the browser, with no server.
 3. **Mark the main conclusion** (★) and **draw links**: drag from the dot on
    top of a premise to the dot under the claim it supports or objects to.
    Drag another premise onto an existing link's label to make a linked
-   argument. Click a link's label to switch it between *supports* and
-   *objects to*. An objection to an objection is shown as *rebuts*.
+   argument. An objection to an objection is shown as *rebuts*. Click a
+   link's label for a menu to switch it between *supports* and *objects to*,
+   reverse its direction, or delete it. Click a line to get an × button that
+   removes it (for a linked argument, that removes just that premise).
 4. **Check my map** scores the map and gives hints that point students back
    to the text without giving the answer away. Students never see the model
    answer; they revise and check again until the map is right.
