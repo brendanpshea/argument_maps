@@ -34,6 +34,8 @@ the browser, with no server.
    conclusion (wrong picks get a hint based on the role that claim plays),
    then map the argument, then restate the claims clearly on the finished,
    locked map.
+7. **Evaluate the reasoning**: for each support link, say whether it is
+   deductive or inductive, then whether it is valid/invalid or strong/weak.
 
 Students can also use an **outline view** to do everything with the keyboard,
 **download** their map as a PNG or as a map file they can load again later,

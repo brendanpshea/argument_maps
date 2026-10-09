@@ -10,6 +10,8 @@ const claimId = z.string().regex(/^[A-Za-z][\w-]*$/, 'claim ids must start with 
 /** `objection` and `rebuttal` are the same relation (an attack); authors may use either word. */
 export const relationTypeSchema = z.enum(['support', 'objection', 'rebuttal']);
 
+const qualitySchema = z.enum(['valid', 'invalid', 'strong', 'weak']);
+
 export const answerRelationSchema = z.object({
   type: relationTypeSchema,
   /** Several premises = a linked argument; separate relations = convergent. */
@@ -47,7 +49,7 @@ export const stepSchema = z.object({
    * `structure`: build the map (the default);
    * `reword`: restate the claims on the finished map (answer taken from the previous structure step).
    */
-  task: z.enum(['conclusion', 'structure', 'reword']).default('structure'),
+  task: z.enum(['conclusion', 'structure', 'reword', 'evaluate']).default('structure'),
   instructions: z.string(),
   /** Text added to the passage at this step, if any. Claims are marked `{{id|text}}`. */
   passage: z.string().default(''),
@@ -55,6 +57,21 @@ export const stepSchema = z.object({
   answer: answerSchema.optional(),
   /** Conclusion steps: a hint to show when a student picks this claim, overriding the automatic one. */
   conclusionHints: z.record(z.string(), z.string()).optional(),
+  /** Evaluate steps: `type` asks only deductive/inductive; `full` (default) also asks valid/invalid or strong/weak. */
+  ask: z.enum(['type', 'full']).optional(),
+  /** Evaluate steps: the support links to evaluate, with the expected answers. */
+  evaluations: z
+    .array(
+      z.object({
+        link: z.object({ from: z.array(claimId).min(1), to: claimId }),
+        type: z.enum(['deductive', 'inductive']),
+        /** valid/invalid for deductive, strong/weak for inductive; a list accepts any of them. Omit to leave quality ungraded. */
+        quality: z.union([qualitySchema, z.array(qualitySchema).min(1)]).optional(),
+        /** Shown instead of the automatic hint when the student's answer for this link is wrong. */
+        hint: z.string().optional(),
+      }),
+    )
+    .optional(),
   /** Other maps that also earn full credit; the best-scoring one is used. */
   alternatives: z.array(answerSchema).optional(),
   mistakes: z.array(mistakeSchema).optional(),

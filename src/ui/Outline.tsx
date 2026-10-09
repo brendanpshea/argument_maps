@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { ArgumentMap, MapNode, RelationType } from '../model/types';
-import type { WordingEdit } from './MapEditor';
+import { EvaluationPicker, type WordingEdit } from './MapEditor';
 import * as ops from '../model/ops';
 
 interface Props {
@@ -8,8 +8,10 @@ interface Props {
   onChange: (map: ArgumentMap) => void;
   nameFor: (nodeId: string) => string;
   editFor: (nodeId: string) => WordingEdit;
-  /** Reword steps: the structure is fixed; only wording can change. */
+  /** Reword and evaluate steps: the structure is fixed. */
   locked?: boolean;
+  /** Evaluate steps: what to ask about a link, or null if it isn't evaluated. */
+  evaluateFor?: (relationId: string) => 'type' | 'full' | null;
 }
 
 function ClaimWording({ node, edit, label, onChange }: { node: MapNode; edit: WordingEdit; label: string; onChange: (text: string) => void }) {
@@ -45,7 +47,7 @@ function ClaimWording({ node, edit, label, onChange }: { node: MapNode; edit: Wo
  * A keyboard- and screen-reader-friendly way to build the same map as the
  * drag-and-drop canvas.
  */
-export function Outline({ map, onChange, nameFor, editFor, locked }: Props) {
+export function Outline({ map, onChange, nameFor, editFor, locked, evaluateFor }: Props) {
   const [premises, setPremises] = useState<string[]>([]);
   const [target, setTarget] = useState('');
   const [type, setType] = useState<RelationType>('support');
@@ -84,6 +86,14 @@ export function Outline({ map, onChange, nameFor, editFor, locked }: Props) {
             <span>
               {r.from.map(nameFor).join(' + ')} <strong className={r.type}>{ops.relationLabel(map, r.id)}</strong> {nameFor(r.to)}
             </span>
+            {evaluateFor?.(r.id) && (
+              <EvaluationPicker
+                className="outline-eval"
+                ask={evaluateFor(r.id)!}
+                value={r.evaluation ?? {}}
+                onChange={(next) => onChange(ops.setEvaluation(map, r.id, next))}
+              />
+            )}
             {!locked && (
               <>
             <button onClick={() => onChange(ops.toggleRelationType(map, r.id))}>Switch type</button>

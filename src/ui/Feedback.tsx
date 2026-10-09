@@ -10,11 +10,12 @@ interface Props {
   /** A reword step: compare every claim, and (free rewording) ask the student to confirm. */
   rewordStep?: boolean;
   conclusionStep?: boolean;
+  evaluateStep?: boolean;
   compared?: boolean;
   onCompared?: () => void;
 }
 
-export function Feedback({ lesson, map, result, rewordStep, conclusionStep, compared, onCompared }: Props) {
+export function Feedback({ lesson, map, result, rewordStep, conclusionStep, evaluateStep, compared, onCompared }: Props) {
   const pct = result.possible ? Math.round((100 * result.earned) / result.possible) : 0;
   const scored = result.items.filter((i) => i.status !== 'note' && i.status !== 'correct');
   const notes = result.items.filter((i) => i.status === 'note');
@@ -41,7 +42,13 @@ export function Feedback({ lesson, map, result, rewordStep, conclusionStep, comp
       </div>
       {freeReword ? null : scored.length === 0 ? (
         <p className="all-correct">
-          {conclusionStep ? "Yes, that's the main conclusion." : rewordStep ? 'All claims are clearly worded.' : 'Your map is correct.'}
+          {conclusionStep
+            ? "Yes, that's the main conclusion."
+            : rewordStep
+              ? 'All claims are clearly worded.'
+              : evaluateStep
+                ? 'All your evaluations are right.'
+                : 'Your map is correct.'}
         </p>
       ) : (
         <ul className="grade-items">
@@ -68,7 +75,13 @@ export function Feedback({ lesson, map, result, rewordStep, conclusionStep, comp
       )}
       {scored.length > 0 && (
         <p className="hint">
-          {conclusionStep ? 'Pick another claim and check again.' : rewordStep ? 'Choose a better wording and check again.' : 'Revise your map and check again.'}
+          {conclusionStep
+            ? 'Pick another claim and check again.'
+            : rewordStep
+              ? 'Choose a better wording and check again.'
+              : evaluateStep
+                ? 'Click a link’s label to change your evaluation, then check again.'
+                : 'Revise your map and check again.'}
         </p>
       )}
       {/* Model wording could give away claims or structure, so it appears only once the map is right. */}

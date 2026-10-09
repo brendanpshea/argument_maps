@@ -1,0 +1,67 @@
+id: butler
+title: Who stole the jewels?
+description: >
+  An introduction to evaluating reasoning. Four reasons for the same
+  conclusion: one deductive and valid, one deductive but invalid, one
+  inductively strong, and one inductively weak.
+claimMode: marked
+rewording: none
+
+steps:
+  - task: conclusion
+    title: Find the main conclusion
+    instructions: Which claim is the speaker trying to get you to accept? Click it.
+    passage: |
+      {{x1|Someone stole the jewels from Lady Ashworth's safe last night.}} I'm convinced
+      {{c|the butler is the thief}}.
+
+      Consider: {{p1|whoever stole the jewels had to open the safe with its key}}, and
+      {{p2|only the butler had a key}}. So it could only have been him.
+
+      Also, {{p3|the butler's fingerprints were found on the jewel cases inside the safe}},
+      which makes it very likely that he took them.
+
+      And {{p4|if the butler were the thief, he would have been nervous at dinner}}.
+      {{p5|He was clearly nervous at dinner}}, so he must be guilty.
+
+      Finally, {{p6|in the mystery novels I've read, the butler is often the culprit}},
+      which suggests he's the culprit here too.
+
+  - title: Map the argument
+    instructions: >
+      Map the four reasons the speaker gives. Some of them use two premises
+      that only work together.
+    answer:
+      conclusion: c
+      relations:
+        - { type: support, from: [p1, p2], to: c }
+        - { type: support, from: [p3], to: c }
+        - { type: support, from: [p4, p5], to: c }
+        - { type: support, from: [p6], to: c }
+
+  - task: evaluate
+    title: Evaluate the reasoning
+    instructions: >
+      Click each link's label. First decide whether the speaker presents the
+      premises as guaranteeing the conclusion (deductive) or as making it likely
+      (inductive); words like “must”, “could only”, “very likely”, and
+      “suggests” are clues. Then judge the reasoning: for a deductive link, if
+      the premises were true, would the conclusion have to be true (valid)? For
+      an inductive link, would it be probable (strong)?
+    evaluations:
+      - link: { from: [p1, p2], to: c }
+        type: deductive
+        quality: valid
+      - link: { from: [p3], to: c }
+        type: inductive
+        quality: strong
+      - link: { from: [p4, p5], to: c }
+        type: deductive
+        quality: invalid
+        hint: >
+          Suppose both premises are true: the butler would have been nervous if
+          guilty, and he was nervous. Could he still be innocent? What else
+          might make someone nervous at dinner?
+      - link: { from: [p6], to: c }
+        type: inductive
+        quality: weak

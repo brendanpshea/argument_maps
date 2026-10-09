@@ -1,5 +1,5 @@
 /** Pure editing operations on an ArgumentMap. Each returns a new map. */
-import type { ArgumentMap, ClaimSource, MapNode, RelationType } from './types';
+import type { ArgumentMap, ClaimSource, Evaluation, MapNode, RelationType } from './types';
 
 let counter = 0;
 const newId = (prefix: string) => `${prefix}${Date.now().toString(36)}${(counter++).toString(36)}`;
@@ -118,6 +118,11 @@ export function setPositions(map: ArgumentMap, positions: Record<string, { x: nu
     relations: map.relations.map((r) => (positions[r.id] ? { ...r, position: positions[r.id] } : r)),
   };
 }
+
+export const setEvaluation = (map: ArgumentMap, relationId: string, evaluation: Evaluation): ArgumentMap => ({
+  ...map,
+  relations: map.relations.map((r) => (r.id === relationId ? { ...r, evaluation } : r)),
+});
 
 /** Swaps premise and target of a single-premise relation. */
 export const reverseRelation = (map: ArgumentMap, relationId: string): ArgumentMap => ({

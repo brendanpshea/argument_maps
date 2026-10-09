@@ -70,7 +70,30 @@ export interface Mistake {
   message: string;
 }
 
-export type StepTask = 'conclusion' | 'structure' | 'reword';
+export type StepTask = 'conclusion' | 'structure' | 'reword' | 'evaluate';
+
+export type InferenceType = 'deductive' | 'inductive';
+export type InferenceQuality = 'valid' | 'invalid' | 'strong' | 'weak';
+export const QUALITIES: Record<InferenceType, [InferenceQuality, InferenceQuality]> = {
+  deductive: ['valid', 'invalid'],
+  inductive: ['strong', 'weak'],
+};
+
+/** A student's (or the key's) judgement of one support link. */
+export interface Evaluation {
+  type?: InferenceType;
+  quality?: InferenceQuality;
+}
+
+/** The expected evaluation of one support link in an evaluate step. */
+export interface EvaluationKey {
+  from: string[];
+  to: string;
+  type: InferenceType;
+  /** Acceptable qualities; empty means quality isn't graded. */
+  quality: InferenceQuality[];
+  hint?: string;
+}
 
 export interface Step {
   title?: string;
@@ -83,6 +106,9 @@ export interface Step {
   mistakes: Mistake[];
   /** Conclusion steps: per-claim hints that override the automatic ones. */
   conclusionHints: Record<string, string>;
+  /** Evaluate steps: what to ask, and the expected evaluations. */
+  ask: 'type' | 'full';
+  evaluations: EvaluationKey[];
 }
 
 export interface Lesson {
@@ -111,6 +137,8 @@ export interface MapNode {
 export interface MapRelation {
   id: string;
   type: RelationType;
+  /** Evaluate steps: the student's judgement of this (support) link. */
+  evaluation?: Evaluation;
   /** Node ids. More than one = linked premises. */
   from: string[];
   to: string;

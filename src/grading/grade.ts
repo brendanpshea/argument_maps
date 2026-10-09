@@ -1,4 +1,4 @@
-import { isBank, type Answer, type ArgumentMap, type ClaimSource, type Lesson, type MapRelation, type Span, type Step } from '../model/types';
+import { isBank, type Answer, type ArgumentMap, type ClaimSource, type EvaluationKey, type Lesson, type MapRelation, type Span, type Step } from '../model/types';
 
 export type ItemStatus = 'correct' | 'partial' | 'wrong' | 'missing' | 'note';
 
@@ -134,6 +134,32 @@ function namer(lesson: Lesson, map: ArgumentMap, mapping: Record<string, string>
 /** Wording is scored in reword steps if the lesson has any; otherwise alongside the structure. */
 export const hasRewordStep = (lesson: Lesson) => lesson.steps.some((s) => s.task === 'reword');
 
+/** For each link in the map that this (evaluate) step asks about, its expected evaluation. */
+export function evaluationKeys(lesson: Lesson, step: Step, map: ArgumentMap): Map<string, EvaluationKey> {
+  const { mapping } = matchNodes(lesson, map);
+  const canon = (id: string) => canonical(lesson, id);
+  const keys = new Map<string, EvaluationKey>();
+  for (const r of map.relations) {
+    if (r.type !== 'support' || !mapping[r.to]) continue;
+    const from = uniq(r.from.filter((f) => mapping[f]).map((f) => canon(mapping[f])));
+    const key = step.evaluations.find((k) => canon(mapping[r.to]) === canon(k.to) && sameSet(from, uniq(k.from.map(canon))));
+    if (key) keys.set(r.id, key);
+  }
+  return keys;
+}
+
+/** The step's expected evaluations applied to a map (first acceptable quality), e.g. for the model answer. */
+export function withKeyEvaluations(lesson: Lesson, step: Step, map: ArgumentMap): ArgumentMap {
+  const keys = evaluationKeys(lesson, step, map);
+  return {
+    ...map,
+    relations: map.relations.map((r) => {
+      const key = keys.get(r.id);
+      return key ? { ...r, evaluation: { type: key.type, quality: key.quality[0] } } : r;
+    }),
+  };
+}
+
 function wordingItems(lesson: Lesson, map: ArgumentMap, mapping: Record<string, string>, claimIds: string[]): GradeItem[] {
   const { nodeFor, name } = namer(lesson, map, mapping);
   const items: GradeItem[] = [];
@@ -204,6 +230,52 @@ function gradeConclusion(lesson: Lesson, step: Step, map: ArgumentMap): GradeRes
     hint = `Does the author argue for ${subject}, or is it just setting the scene?`;
   }
   return one('wrong', 0, hint);
+}
+
+/** An evaluate step: is each evaluated support link classified (and judged) correctly? */
+function gradeEvaluation(lesson: Lesson, step: Step, map: ArgumentMap): GradeResult {
+  const { mapping } = matchNodes(lesson, map);
+  const { nodeName } = namer(lesson, map, mapping);
+  const items: GradeItem[] = [];
+  const keys = evaluationKeys(lesson, step, map);
+  for (const key of step.evaluations) {
+    const rel = map.relations.find((r) => keys.get(r.id) === key);
+    if (!rel) continue; // e.g. an optional link the student left out
+    const link = `${joinNames(rel.from.map(nodeName))} → ${nodeName(rel.to)}`;
+    const premises = rel.from.length > 1 ? 'the premises' : 'the premise';
+    const given = rel.evaluation ?? {};
+    const gradeQuality = step.ask === 'full' && key.quality.length > 0;
+    if (!given.type) {
+      items.push({ status: 'missing', earned: 0, possible: 1 + (gradeQuality ? 1 : 0), message: `Evaluate the link ${link}.` });
+      continue;
+    }
+    if (given.type !== key.type) {
+      items.push({
+        status: 'wrong',
+        earned: 0,
+        possible: 1 + (gradeQuality ? 1 : 0),
+        message:
+          key.hint ??
+          `${link}: is the arguer claiming that ${premises} guarantee the conclusion, or only that they make it likely? Look at the words that introduce it.`,
+      });
+      continue;
+    }
+    items.push({ status: 'correct', earned: 1, possible: 1, message: `${link}: ${key.type}.` });
+    if (!gradeQuality) continue;
+    if (!given.quality) {
+      items.push({ status: 'missing', earned: 0, possible: 1, message: `${link}: you classified it; now judge how good the reasoning is.` });
+    } else if (key.quality.includes(given.quality)) {
+      items.push({ status: 'correct', earned: 1, possible: 1, message: `${link}: ${given.quality}.` });
+    } else {
+      const auto =
+        key.type === 'deductive'
+          ? `${link}: imagine ${premises} true. Could the conclusion still be false? If not, it's valid; if so, it's invalid.`
+          : `${link}: if ${premises} were true, how likely would the conclusion be? Could something else easily explain ${rel.from.length > 1 ? 'them' : 'it'}?`;
+      items.push({ status: 'wrong', earned: 0, possible: 1, message: key.hint ?? auto });
+    }
+  }
+  if (!items.length) items.push({ status: 'correct', earned: 1, possible: 1, message: 'No links to evaluate here.' });
+  return total(items, mapping);
 }
 
 function gradeAgainst(lesson: Lesson, step: Step, map: ArgumentMap, rawAnswer: Answer): GradeResult {
@@ -403,6 +475,7 @@ function gradeAgainst(lesson: Lesson, step: Step, map: ArgumentMap, rawAnswer: A
 export function gradeStep(lesson: Lesson, stepIndex: number, map: ArgumentMap): GradeResult {
   const step = lesson.steps[stepIndex];
   if (step.task === 'conclusion') return gradeConclusion(lesson, step, map);
+  if (step.task === 'evaluate') return gradeEvaluation(lesson, step, map);
   const grade = step.task === 'reword' ? (a: Answer) => gradeWording(lesson, map, a) : (a: Answer) => gradeAgainst(lesson, step, map, a);
   const fraction = (r: GradeResult) => (r.possible ? r.earned / r.possible : 0);
   return step.answers.map(grade).reduce((best, r) => (fraction(r) > fraction(best) ? r : best));
