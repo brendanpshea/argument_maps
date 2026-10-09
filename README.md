@@ -20,8 +20,9 @@ the browser, with no server.
    from is always the premise, whichever dot you use.
    Drag another premise onto an existing link's label to make a linked
    argument. An objection to an objection is shown as *rebuts*. Click a
-   link's label for a menu to switch it between *supports* and *objects to*,
-   reverse its direction, or delete it. Click a line to get an × button that
+   link's label for a menu to link it with another premise (mutual
+   support), split a linked link into independent reasons, switch it between
+   *supports* and *objects to*, reverse its direction, or delete it. Click a line to get an × button that
    removes it (for a linked argument, that removes just that premise).
 4. **Check my map** scores the map and gives hints that point students back
    to the text without giving the answer away. Students never see the model

@@ -215,3 +215,7 @@ details > summary { cursor: pointer; color: var(--accent); }
 .react-flow__node:hover .react-flow__handle-left, .react-flow__node:hover .react-flow__handle-right,
 .react-flow__handle-left.connectingto, .react-flow__handle-right.connectingto { opacity: 1; }
 .junction .react-flow__handle { width: 8px; height: 8px; }
+
+.link-menu-title { margin: 0.2rem 0.6rem 0.3rem; font-size: 0.78rem; color: var(--muted); max-width: 240px; }
+.junction .link-menu button.muted { color: var(--muted); }
+.junction .link-menu { max-height: 320px; overflow-y: auto; }

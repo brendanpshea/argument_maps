@@ -80,6 +80,21 @@ export function Outline({ map, onChange, nameFor, editFor }: Props) {
             </span>
             <button onClick={() => onChange(ops.toggleRelationType(map, r.id))}>Switch type</button>
             {r.from.length === 1 && <button onClick={() => onChange(ops.reverseRelation(map, r.id))}>Reverse</button>}
+            {r.from.length > 1 && <button onClick={() => onChange(ops.splitRelation(map, r.id))}>Split</button>}
+            <select
+              aria-label="Link with another premise"
+              value=""
+              onChange={(e) => e.target.value && onChange(ops.linkPremise(map, r.id, e.target.value))}
+            >
+              <option value="">Link with…</option>
+              {map.nodes
+                .filter((n) => n.id !== r.to && !r.from.includes(n.id))
+                .map((n) => (
+                  <option key={n.id} value={n.id}>
+                    {nameFor(n.id)}
+                  </option>
+                ))}
+            </select>
             <button onClick={() => onChange(ops.removeRelation(map, r.id))}>Remove</button>
           </li>
         ))}
