@@ -46,7 +46,14 @@ type ClaimData = {
   isConclusion: boolean;
   readOnly: boolean;
 };
-type JunctionData = { type: RelationType; label: string; premises: number; readOnly: boolean };
+type JunctionData = {
+  type: RelationType;
+  label: string;
+  premises: number;
+  /** Claims that could be added to this link as linked premises. */
+  candidates: { id: string; name: string }[];
+  readOnly: boolean;
+};
 type LinkEdgeT = Edge<{ readOnly: boolean; title: string }, 'link'>;
 type ClaimNodeT = Node<ClaimData, 'claim'>;
 type JunctionNodeT = Node<JunctionData, 'junction'>;
@@ -58,6 +65,8 @@ interface Actions {
   toggleType(relationId: string): void;
   reverse(relationId: string): void;
   removeRelation(relationId: string): void;
+  linkPremise(relationId: string, nodeId: string): void;
+  split(relationId: string): void;
   removeEdge(edgeId: string): void;
 }
 const ActionsContext = createContext<Actions | null>(null);
@@ -165,9 +174,13 @@ function SideHandles() {
 function JunctionNode({ id, data, selected }: NodeProps<JunctionNodeT>) {
   const actions = useContext(ActionsContext)!;
   const [open, setOpen] = useState(false);
+  const [picking, setPicking] = useState(false);
   useEffect(() => {
     if (!selected) setOpen(false);
   }, [selected]);
+  useEffect(() => {
+    if (!open) setPicking(false);
+  }, [open]);
   const act = (fn: () => void) => () => {
     setOpen(false);
     fn();
@@ -185,8 +198,31 @@ function JunctionNode({ id, data, selected }: NodeProps<JunctionNodeT>) {
       >
         {data.label}
       </button>
-      {open && (
+      {open && picking && (
+        <div className="link-menu nodrag" role="menu" aria-label="Link with another premise">
+          <p className="link-menu-title">Which premise works together with {data.premises > 1 ? 'these' : 'this one'}?</p>
+          {data.candidates.map((c) => (
+            <button key={c.id} role="menuitem" onClick={act(() => actions.linkPremise(id, c.id))}>
+              {c.name}
+            </button>
+          ))}
+          <button role="menuitem" className="muted" onClick={() => setPicking(false)}>
+            ← Back
+          </button>
+        </div>
+      )}
+      {open && !picking && (
         <div className="link-menu nodrag" role="menu">
+          {data.candidates.length > 0 && (
+            <button role="menuitem" onClick={() => setPicking(true)}>
+              Link with another premise…
+            </button>
+          )}
+          {data.premises > 1 && (
+            <button role="menuitem" onClick={act(() => actions.split(id))}>
+              Split into independent reasons
+            </button>
+          )}
           <button role="menuitem" onClick={act(() => actions.toggleType(id))}>
             Change to {data.type === 'support' ? 'objection' : 'support'}
           </button>
@@ -227,6 +263,8 @@ function LinkEdge({ id, sourceX, sourceY, targetX, targetY, sourcePosition, targ
     </>
   );
 }
+
+const truncate = (s: string, n = 48) => (s.length > n ? `${s.slice(0, n - 1).trimEnd()}…` : s);
 
 const nodeTypes = { claim: ClaimNode, junction: JunctionNode };
 const edgeTypes = { link: LinkEdge };
@@ -275,7 +313,15 @@ function buildNodes(map: ArgumentMap, props: MapEditorProps, prev: Node[]): Node
         type: 'junction',
         position: junctionPosition(map, r),
         ...keep(r.id),
-        data: { type: r.type, label: ops.relationLabel(map, r.id), premises: r.from.length, readOnly },
+        data: {
+          type: r.type,
+          label: ops.relationLabel(map, r.id),
+          premises: r.from.length,
+          candidates: map.nodes
+            .filter((n) => n.id !== r.to && !r.from.includes(n.id))
+            .map((n) => ({ id: n.id, name: [props.labelFor?.(n.id), truncate(n.text)].filter(Boolean).join(' ') })),
+          readOnly,
+        },
       };
     }),
   ];
@@ -284,10 +330,13 @@ function buildNodes(map: ArgumentMap, props: MapEditorProps, prev: Node[]): Node
 /** Where a link's label sits: its saved position, or midway between its premises and its target. */
 function junctionPosition(map: ArgumentMap, r: MapRelation): { x: number; y: number } {
   if (r.position) return r.position;
-  const ends = [...r.from, r.to].flatMap((id) => map.nodes.filter((n) => n.id === id));
-  if (!ends.length) return { x: 0, y: 0 };
-  const cx = ends.reduce((sum, n) => sum + n.position.x, 0) / ends.length + CLAIM_SIZE.width / 2;
-  const cy = ends.reduce((sum, n) => sum + n.position.y, 0) / ends.length + CLAIM_SIZE.height / 2;
+  const premises = map.nodes.filter((n) => r.from.includes(n.id));
+  const target = map.nodes.find((n) => n.id === r.to);
+  if (!premises.length || !target) return { x: 0, y: 0 };
+  // Halfway between the premises' average position and the target.
+  const avg = (key: 'x' | 'y') => premises.reduce((sum, n) => sum + n.position[key], 0) / premises.length;
+  const cx = (avg('x') + target.position.x) / 2 + CLAIM_SIZE.width / 2;
+  const cy = (avg('y') + target.position.y) / 2 + CLAIM_SIZE.height / 2;
   return { x: cx - JUNCTION_SIZE.width / 2, y: cy - JUNCTION_SIZE.height / 2 };
 }
 
@@ -306,7 +355,8 @@ function buildEdges(map: ArgumentMap, prev: Edge[], readOnly: boolean): LinkEdge
     const b = center(target);
     const dx = b.x - a.x;
     const dy = b.y - a.y;
-    if (Math.abs(dx) > Math.abs(dy) * 1.5) {
+    // Prefer vertical lines; use the sides only when the boxes are clearly side by side.
+    if (Math.abs(dx) > Math.abs(dy) * 2.5) {
       return dx > 0 ? { sourceHandle: 'right', targetHandle: 'left' } : { sourceHandle: 'left', targetHandle: 'right' };
     }
     return dy >= 0 ? { sourceHandle: 'bottom', targetHandle: 'top' } : { sourceHandle: 'top', targetHandle: 'bottom' };
@@ -378,6 +428,8 @@ function Editor(props: MapEditorProps) {
       commit(ops.reverseRelation(swapped, id));
     },
     removeRelation: (id) => commit(ops.removeRelation(mapRef.current, id)),
+    linkPremise: (id, nodeId) => commit(ops.linkPremise(mapRef.current, id, nodeId)),
+    split: (id) => commit(ops.splitRelation(mapRef.current, id)),
     removeEdge: (id) => commit(removeEdgeFromMap(mapRef.current, id)),
   };
 

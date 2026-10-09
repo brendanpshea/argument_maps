@@ -210,3 +210,29 @@ describe('map editing', () => {
     expect(next.relations[1]).toMatchObject({ from: ['c', 'd'], to: 'b' });
   });
 });
+
+describe('linking and splitting premises', () => {
+  const base: ArgumentMap = {
+    nodes: [],
+    relations: [
+      { id: 'r1', type: 'support', from: ['a'], to: 'c' },
+      { id: 'r2', type: 'support', from: ['b'], to: 'c' },
+      { id: 'r3', type: 'objection', from: ['b'], to: 'c' },
+    ],
+  };
+
+  it('links a premise and merges its separate link of the same kind', async () => {
+    const ops = await import('../model/ops');
+    const next = ops.linkPremise(base, 'r1', 'b');
+    expect(next.relations.find((r) => r.id === 'r1')?.from).toEqual(['a', 'b']);
+    expect(next.relations.map((r) => r.id)).toEqual(['r1', 'r3']); // the objection is a different link, so it stays
+  });
+
+  it('splits a linked link back into independent ones', async () => {
+    const ops = await import('../model/ops');
+    const split = ops.splitRelation(ops.linkPremise(base, 'r1', 'b'), 'r1');
+    const supports = split.relations.filter((r) => r.type === 'support');
+    expect(supports.map((r) => r.from)).toEqual([['a'], ['b']]);
+    expect(supports.every((r) => r.to === 'c')).toBe(true);
+  });
+});

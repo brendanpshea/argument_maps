@@ -57,6 +57,39 @@ export function addPremise(map: ArgumentMap, relationId: string, nodeId: string)
   };
 }
 
+/**
+ * Adds a premise to a link as a linked (mutual) premise. If that premise
+ * already had its own separate link of the same kind to the same target,
+ * that link is merged in rather than left as a duplicate.
+ */
+export function linkPremise(map: ArgumentMap, relationId: string, nodeId: string): ArgumentMap {
+  const rel = map.relations.find((r) => r.id === relationId);
+  if (!rel || rel.to === nodeId || rel.from.includes(nodeId)) return map;
+  const merged = addPremise(map, relationId, nodeId);
+  return {
+    ...merged,
+    relations: merged.relations
+      .filter((r) => !(r.id !== relationId && r.to === rel.to && r.type === rel.type && r.from.length === 1 && r.from[0] === nodeId))
+      // Re-centre the label between all its premises and the target.
+      .map((r) => (r.id === relationId ? { ...r, position: undefined } : r)),
+  };
+}
+
+/** Turns a linked link into one independent link per premise, same kind and target. */
+export function splitRelation(map: ArgumentMap, relationId: string): ArgumentMap {
+  const rel = map.relations.find((r) => r.id === relationId);
+  if (!rel || rel.from.length < 2) return map;
+  const [first, ...rest] = rel.from;
+  return {
+    ...map,
+    relations: map.relations.flatMap((r) =>
+      r.id === relationId
+        ? [{ ...r, from: [first], position: undefined }, ...rest.map((f) => ({ id: newId('r'), type: r.type, from: [f], to: r.to }))]
+        : [r],
+    ),
+  };
+}
+
 export function removePremise(map: ArgumentMap, relationId: string, nodeId: string): ArgumentMap {
   return {
     ...map,
