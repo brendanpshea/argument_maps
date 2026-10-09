@@ -8,6 +8,8 @@ interface Props {
   /** Spans already on the student's map (highlighted in the text). */
   usedSpans: Span[];
   readOnly?: boolean;
+  /** Label for the highlight-mode button (default "Add claim"). */
+  addLabel?: string;
   onAddClaim: (span: Span, text: string) => void;
 }
 
@@ -55,7 +57,7 @@ function MarkedSegment({ lesson, segment, usedSpans, readOnly, onAddClaim }: Omi
   return <div className="passage-text">{parts}</div>;
 }
 
-function HighlightSegment({ lesson, segment, usedSpans, readOnly, onAddClaim }: Omit<Props, 'stepIndex'> & { segment: number }) {
+function HighlightSegment({ lesson, segment, usedSpans, readOnly, addLabel, onAddClaim }: Omit<Props, 'stepIndex'> & { segment: number }) {
   const text = lesson.steps[segment].passage;
   const ref = useRef<HTMLDivElement>(null);
   const [pending, setPending] = useState<Span | null>(null);
@@ -100,7 +102,7 @@ function HighlightSegment({ lesson, segment, usedSpans, readOnly, onAddClaim }: 
               setPending(null);
             }}
           >
-            Add claim
+            {addLabel ?? 'Add claim'}
           </button>
           <span className="hint">{pending ? `“${text.slice(pending.start, pending.end).trim()}”` : 'Select the text of a claim in this passage.'}</span>
         </div>
@@ -113,13 +115,17 @@ export function Passage(props: Props) {
   const Segment = props.lesson.claimMode === 'marked' ? MarkedSegment : HighlightSegment;
   return (
     <section className="passage" aria-label="Passage">
-      {props.lesson.steps.slice(0, props.stepIndex + 1).map((step, i) => (
-        <div key={i} className={`passage-segment${i === props.stepIndex && i > 0 ? ' is-new' : ''}`}>
-          {i === props.stepIndex && i > 0 && <span className="new-tag">New in this step</span>}
-          <Segment {...props} segment={i} />
-          {step.title && i < props.stepIndex && <span className="segment-label">{step.title}</span>}
-        </div>
-      ))}
+      {props.lesson.steps.slice(0, props.stepIndex + 1).map((step, i) => {
+        // Steps without new text (e.g. reword steps) add nothing to the passage.
+        if (!step.passage) return null;
+        const isNew = i === props.stepIndex && props.lesson.steps.slice(0, i).some((s) => s.passage);
+        return (
+          <div key={i} className={`passage-segment${isNew ? ' is-new' : ''}`}>
+            {isNew && <span className="new-tag">New in this step</span>}
+            <Segment {...props} segment={i} />
+          </div>
+        );
+      })}
     </section>
   );
 }

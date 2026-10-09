@@ -70,13 +70,19 @@ export interface Mistake {
   message: string;
 }
 
+export type StepTask = 'conclusion' | 'structure' | 'reword';
+
 export interface Step {
   title?: string;
+  task: StepTask;
   instructions: string;
   /** Plain passage text for this step, with claim markup removed. */
   passage: string;
+  /** For conclusion and reword steps, these come from the neighbouring structure step. */
   answers: Answer[];
   mistakes: Mistake[];
+  /** Conclusion steps: per-claim hints that override the automatic ones. */
+  conclusionHints: Record<string, string>;
 }
 
 export interface Lesson {

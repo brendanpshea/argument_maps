@@ -1,16 +1,18 @@
 id: zoos
 title: Should zoos be phased out?
 description: >
-  A short argument with a linked pair of premises, a sub-argument,
-  an objection, and a rebuttal. The claims are numbered for you.
+  A scaffolded lesson: find the main conclusion, map the argument (a linked
+  pair, a sub-argument, an objection, and a rebuttal), then state the claims
+  clearly. The claims are numbered for you.
 claimMode: marked
+rewording: choose
 
 steps:
-  - instructions: >
-      Click each claim that is part of the argument to add it to your map
-      (not every sentence is!). Mark the main conclusion with ★, then drag
-      from one claim to another to show which claims support or object to which.
-      Drop a premise onto an existing link to make a linked argument.
+  - task: conclusion
+    title: Find the main conclusion
+    instructions: >
+      Read the passage. Which claim is the author ultimately trying to get you
+      to accept? Click it. (Not every numbered sentence is part of the argument.)
     passage: |
       {{x1|Zoos have existed since ancient Egypt.}} But {{c1|modern zoos should be phased out}}.
       {{c2|Large animals such as elephants suffer in captivity}}, as {{c3|they show stress
@@ -20,6 +22,17 @@ steps:
 
       Some argue that {{c6|zoos inspire children to care about wildlife}}. But {{c7|nature
       documentaries and wildlife sanctuaries can inspire children just as well}}.
+    conclusionHints:
+      x1: >
+        Is the author arguing that zoos have existed since ancient Egypt, or
+        just setting the scene? Notice the “But” that follows.
+
+  - title: Map the argument
+    instructions: >
+      Add the other claims that are part of the argument, then drag from one
+      claim to another to show which claims support or object to which. Drop a
+      premise onto an existing link (or use “Link with another premise…” in the
+      link's menu) when premises only work together.
     answer:
       conclusion: c1
       relations:
@@ -31,9 +44,40 @@ steps:
     mistakes:
       - relation: { type: support, from: [c3], to: c1 }
         message: >
-          Does (3) bear on the conclusion directly, or is it evidence for
+          Does (4) bear on the conclusion directly, or is it evidence for
           another premise?
       - relation: { type: support, from: [c7], to: c1 }
         message: >
-          Does (7) give a new reason to phase out zoos? Or is the author
+          Does (8) give a new reason to phase out zoos? Or is the author
           responding to something else in the passage?
+
+  - task: reword
+    title: State the claims clearly
+    instructions: >
+      Now that you know what each claim does, make sure each one is clear on
+      its own. Some claims lean on their context: a “they” or a “just as well”
+      only makes sense next to the sentence before it. Use ✎ to choose the
+      clearest wording for each claim that has one.
+
+wordingChoices:
+  c3:
+    best: Large animals in zoos, such as elephants, show stress behaviors like pacing and swaying that are almost never seen in the wild.
+    others:
+      - text: They show stress behaviors.
+        why: “They” isn't clear on its own, and this drops the comparison with animals in the wild.
+      - text: Elephants in the wild often pace and sway.
+        why: That reverses the claim. These behaviors are almost never seen in the wild.
+  c4:
+    best: Zoos' main justification for existing is that they help conservation.
+    others:
+      - text: Zoos help conservation.
+        why: The author says zoos claim to help conservation, not that they actually do.
+      - text: Conservation is important.
+        why: That changes the subject. The claim is about how zoos justify themselves.
+  c7:
+    best: Nature documentaries and wildlife sanctuaries can inspire children to care about wildlife as well as zoos do.
+    others:
+      - text: They can inspire children just as well.
+        why: “They” and “just as well” only make sense next to the previous sentence.
+      - text: Nature documentaries are better than zoos.
+        why: Too strong. The author says “just as well,” not better, and drops sanctuaries.

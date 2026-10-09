@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { stringify as toYaml } from 'yaml';
-import { gradeStep, matchNodes, type GradeResult } from '../grading/grade';
+import { gradeStep, hasRewordStep, matchNodes, type GradeResult } from '../grading/grade';
 import { mapFromAnswer } from '../model/layout';
 import * as ops from '../model/ops';
 import { stableShuffle } from '../model/shuffle';
-import { emptyMap, isBank, type ArgumentMap, type ClaimSource, type Lesson } from '../model/types';
+import { emptyMap, isBank, type ArgumentMap, type ClaimSource, type Lesson, type Span } from '../model/types';
 import type { LessonProgress, ProgressStore } from '../storage/progress';
 import { downloadMapJson, readMapFile } from './exportMap';
 import { Feedback } from './Feedback';
@@ -21,6 +21,26 @@ interface Props {
   onExit?: () => void;
 }
 
+/** The main area of a conclusion step: the claim the student picked, if any. */
+function ConclusionPick({ text, label }: { text?: string; label?: string }) {
+  return (
+    <div className="conclusion-pick">
+      {text ? (
+        <div className="conclusion-card">
+          <span className="conclusion-tag">Your main conclusion</span>
+          <p>
+            {label && <span className="claim-number">{label} </span>}
+            {text}
+          </p>
+          <p className="hint">Pick a different claim in the passage to change your answer.</p>
+        </div>
+      ) : (
+        <p className="hint">Which claim is the author ultimately trying to get you to accept? Pick it in the passage.</p>
+      )}
+    </div>
+  );
+}
+
 const fresh = (): LessonProgress => ({ stepIndex: 0, maps: [emptyMap()], scores: [null], completed: false });
 const truncate = (s: string, n = 40) => (s.length > n ? `${s.slice(0, n - 1).trimEnd()}…` : s);
 
@@ -29,12 +49,15 @@ export function LessonPlayer({ lesson, store, authorMode, onExit }: Props) {
   const [result, setResult] = useState<GradeResult | null>(null);
   const [showModel, setShowModel] = useState(false);
   const [message, setMessage] = useState('');
+  /** Free-rewording steps: the student confirms they compared their wording with the model's. */
+  const [compared, setCompared] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
 
   const { stepIndex } = progress;
   const step = lesson.steps[stepIndex];
   const map = progress.maps[stepIndex] ?? emptyMap();
   const isLast = stepIndex === lesson.steps.length - 1;
+  const task = step.task;
 
   useEffect(() => store.save(lesson.id, progress), [store, lesson.id, progress]);
 
@@ -49,6 +72,8 @@ export function LessonPlayer({ lesson, store, authorMode, onExit }: Props) {
   const editFor = (m: ArgumentMap, nodeId: string): WordingEdit => {
     const node = nodeById(m, nodeId);
     if (!node || lesson.rewording === 'none' || isBank(node.source)) return { kind: 'none' };
+    // With a reword step, wording waits until the structure is done.
+    if (hasRewordStep(lesson) && task !== 'reword' && m !== modelMap) return { kind: 'none' };
     if (lesson.rewording === 'free') return { kind: 'free' };
     const claimId = m === modelMap ? nodeId.slice(2) : mapping[nodeId];
     const choices = claimId ? lesson.claims[claimId]?.wordingChoices : undefined;
@@ -68,16 +93,19 @@ export function LessonPlayer({ lesson, store, authorMode, onExit }: Props) {
 
   const setMap = (next: ArgumentMap) => {
     setResult(null);
+    setCompared(false);
     setProgress((p) => ({ ...p, maps: p.maps.map((m, i) => (i === p.stepIndex ? next : m)) }));
   };
 
-  const passed = !!result && result.earned === result.possible;
+  const freeReword = task === 'reword' && lesson.rewording === 'free';
+  const passed = !!result && result.earned === result.possible && (!freeReword || compared);
   /** Steps unlock one at a time: a student moves on only after getting the current step fully right. */
   const unlocked = (index: number) => authorMode || index < progress.maps.length;
   const canAdvance = !isLast && (passed || unlocked(stepIndex + 1));
 
   const goTo = (index: number) => {
     setResult(null);
+    setCompared(false);
     setShowModel(false);
     setProgress((p) => {
       const maps = [...p.maps];
@@ -89,16 +117,26 @@ export function LessonPlayer({ lesson, store, authorMode, onExit }: Props) {
     });
   };
 
-  const check = () => {
-    const r = gradeStep(lesson, stepIndex, map);
-    setResult(r);
-    const fraction = r.possible ? r.earned / r.possible : 0;
+  /** Conclusion steps: the student's answer is a map holding just the claim they picked. */
+  const pickConclusion = (source: ClaimSource, text: string) => {
+    const withNode = ops.addNode(emptyMap(), text, source);
+    setMap({ ...withNode, conclusion: withNode.nodes[0].id });
+  };
+
+  const recordScore = (fraction: number) => {
     setProgress((p) => {
       const scores = [...p.scores];
       scores[p.stepIndex] = Math.max(scores[p.stepIndex] ?? 0, fraction);
       const done = fraction === 1 && p.stepIndex === lesson.steps.length - 1;
       return { ...p, scores, completed: p.completed || done };
     });
+  };
+
+  const check = () => {
+    const r = gradeStep(lesson, stepIndex, map);
+    setResult(r);
+    // A free-rewording step counts once the student confirms the comparison.
+    if (!(task === 'reword' && lesson.rewording === 'free')) recordScore(r.possible ? r.earned / r.possible : 0);
   };
 
   const importMap = async (file: File) => {
@@ -167,20 +205,23 @@ export function LessonPlayer({ lesson, store, authorMode, onExit }: Props) {
             lesson={lesson}
             stepIndex={stepIndex}
             usedSpans={map.nodes.flatMap((n) => (isBank(n.source) ? [] : [n.source]))}
-            readOnly={showModel}
-            onAddClaim={(span, text) => setMap(ops.addNode(map, text, span))}
+            readOnly={showModel || task === 'reword'}
+            addLabel={task === 'conclusion' ? 'This is the main conclusion' : undefined}
+            onAddClaim={(span: Span, text: string) => (task === 'conclusion' ? pickConclusion(span, text) : setMap(ops.addNode(map, text, span)))}
           />
-          <ClaimBank
-            lesson={lesson}
-            stepIndex={stepIndex}
-            used={map.nodes.flatMap((n) => (isBank(n.source) ? [n.source.bank] : []))}
-            readOnly={showModel}
-            onAdd={(claim) => setMap(ops.addNode(map, claim.passageText, claim.source))}
-          />
+          {task === 'structure' && (
+            <ClaimBank
+              lesson={lesson}
+              stepIndex={stepIndex}
+              used={map.nodes.flatMap((n) => (isBank(n.source) ? [n.source.bank] : []))}
+              readOnly={showModel}
+              onAdd={(claim) => setMap(ops.addNode(map, claim.passageText, claim.source))}
+            />
+          )}
 
           <div className="actions">
-            <button className="primary" onClick={check} disabled={!map.nodes.length}>
-              Check my map
+            <button className="primary" onClick={check} disabled={task === 'conclusion' ? !map.conclusion : !map.nodes.length}>
+              {task === 'conclusion' ? 'Check' : task === 'reword' ? 'Check wording' : 'Check my map'}
             </button>
             {authorMode && (
               <button onClick={() => setShowModel((v) => !v)} aria-pressed={showModel}>
@@ -194,14 +235,29 @@ export function LessonPlayer({ lesson, store, authorMode, onExit }: Props) {
             )}
           </div>
 
-          {result && !showModel && <Feedback lesson={lesson} map={map} result={result} />}
+          {result && !showModel && (
+            <Feedback
+              lesson={lesson}
+              map={map}
+              result={result}
+              rewordStep={task === 'reword'}
+              conclusionStep={task === 'conclusion'}
+              compared={compared}
+              onCompared={() => {
+                setCompared(true);
+                recordScore(1);
+              }}
+            />
+          )}
           {passed && !isLast && <p className="done">Step complete. Continue to the next step when you're ready.</p>}
           {passed && isLast && <p className="done">Lesson complete. Nice work!</p>}
 
-          <details className="outline-wrap">
-            <summary>Outline view (edit with the keyboard)</summary>
-            <Outline map={map} onChange={setMap} nameFor={nameFor} editFor={(id) => editFor(map, id)} />
-          </details>
+          {task !== 'conclusion' && (
+            <details className="outline-wrap">
+              <summary>Outline view (edit with the keyboard)</summary>
+              <Outline map={map} onChange={setMap} nameFor={nameFor} editFor={(id) => editFor(map, id)} locked={task === 'reword'} />
+            </details>
+          )}
 
           <details className="more">
             <summary>Save, load, and reset</summary>
@@ -235,11 +291,15 @@ export function LessonPlayer({ lesson, store, authorMode, onExit }: Props) {
 
         <main className="canvas">
           {showModel && <div className="model-banner">Model answer (read-only)</div>}
+          {task === 'conclusion' && !showModel ? (
+            <ConclusionPick text={map.nodes.find((n) => n.id === map.conclusion)?.text} label={map.conclusion ? numberFor(map, map.conclusion) : undefined} />
+          ) : (
           <MapEditor
             key={showModel ? `model-${stepIndex}` : `mine-${stepIndex}`}
             map={showModel ? modelMap : map}
             onChange={setMap}
             readOnly={showModel}
+            locked={task === 'reword'}
             labelFor={(id) => numberFor(showModel ? modelMap : map, id)}
             originalTextFor={(id) => {
               const n = nodeById(showModel ? modelMap : map, id);
@@ -252,6 +312,7 @@ export function LessonPlayer({ lesson, store, authorMode, onExit }: Props) {
             }}
             exportName={`${lesson.id}-step${stepIndex + 1}${showModel ? '-model' : ''}`}
           />
+          )}
         </main>
       </div>
     </div>

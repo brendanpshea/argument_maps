@@ -100,6 +100,50 @@ map best, and the hints come from that answer.
 target, optional links in and out) and fails if any of them scores below
 100%.
 
+## Scaffolded steps: conclusion → structure → reword
+
+Each step has a `task`, so a lesson can teach one skill at a time:
+
+```yaml
+rewording: choose          # or free
+
+steps:
+  - task: conclusion       # pick the main conclusion
+    title: Find the main conclusion
+    instructions: Which claim is the author ultimately trying to get you to accept?
+    passage: |
+      ...the whole passage, with claims marked...
+    conclusionHints:       # optional: override the automatic hint for a claim
+      x1: Is the author arguing for that, or setting the scene?
+
+  - title: Map the argument   # task: structure (the default); no new passage needed
+    instructions: ...
+    answer: ...
+
+  - task: reword           # restate the claims on the finished map
+    title: State the claims clearly
+    instructions: ...
+```
+
+- **`conclusion`**: students click (or highlight) one claim. Its answer is
+  the conclusion of the next structure step, and `equivalent` restatements
+  count too. A wrong pick gets a hint based on what that claim actually
+  does: a premise ("what is it a reason for?"), an intermediate conclusion
+  ("keep going"), an objection, a rebuttal, or background. The chosen claim
+  carries into the next step already starred as the conclusion.
+- **`structure`**: the default, building the map as described above. Only
+  structure steps have an `answer`.
+- **`reword`**: the map is locked (no adding, removing, or relinking); students
+  only change wording. It is graded against the previous structure step. With
+  `rewording: choose`, each claim that has `wordingChoices` is scored. With
+  `rewording: free`, students compare their wording with the model wording
+  and confirm they have done so.
+
+When a lesson has a reword step, the structure steps keep the passage wording
+(no ✎ button) and don't score wording, so a wording slip never blocks a
+correct map. A step's `passage` is optional: a step that adds no new text
+just shows the passage so far.
+
 ## Multi-step lessons
 
 Each step adds text to the passage, and its `answer` is the **whole** map

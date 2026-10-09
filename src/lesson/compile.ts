@@ -1,7 +1,7 @@
 import { parse as parseYaml } from 'yaml';
 import { lessonFileSchema, type AnswerFile, type RelationTypeFile } from './schema';
 import { parsePassage } from './passage';
-import type { Answer, Claim, Lesson, RelationType, Step } from '../model/types';
+import { isBank, type Answer, type Claim, type Lesson, type RelationType, type Step } from '../model/types';
 
 const relationType = (t: RelationTypeFile): RelationType => (t === 'support' ? 'support' : 'objection');
 
@@ -70,20 +70,54 @@ export function compileLesson(yamlSource: string, fileName = 'lesson'): Lesson {
       return { conclusion: a.conclusion, relations };
     };
 
+    const structure = stepFile.task === 'structure';
+    if (structure && !stepFile.answer) fail(`step ${segment + 1} needs an answer`);
+    if (!structure && (stepFile.answer || stepFile.alternatives || stepFile.mistakes)) {
+      fail(`step ${segment + 1} is a ${stepFile.task} step, which takes its answer from a structure step; remove answer/alternatives/mistakes`);
+    }
+    if (stepFile.conclusionHints && stepFile.task !== 'conclusion') fail(`step ${segment + 1}: conclusionHints only apply to conclusion steps`);
+    for (const id of Object.keys(stepFile.conclusionHints ?? {})) {
+      if (!claims[id]) fail(`step ${segment + 1} conclusionHints has "${id}", which is not a claim in this or an earlier step`);
+    }
     steps.push({
       title: stepFile.title,
+      task: stepFile.task,
       instructions: stepFile.instructions.trim(),
       passage: passage.text,
-      answers: [
-        toAnswer(stepFile.answer, 'answer'),
-        ...(stepFile.alternatives ?? []).map((a, i) => toAnswer(a, `alternative ${i + 1}`)),
-      ],
+      answers: structure
+        ? [toAnswer(stepFile.answer!, 'answer'), ...(stepFile.alternatives ?? []).map((a, i) => toAnswer(a, `alternative ${i + 1}`))]
+        : [],
+      conclusionHints: stepFile.conclusionHints ?? {},
       mistakes: (stepFile.mistakes ?? []).map((m) => ({
         message: m.message,
         relation: { type: relationType(m.relation.type), from: m.relation.from, to: m.relation.to },
       })),
     });
   });
+
+  // Conclusion steps grade against the next structure step; reword steps against the previous one.
+  steps.forEach((step, i) => {
+    if (step.task === 'structure') return;
+    const source =
+      step.task === 'conclusion'
+        ? steps.slice(i + 1).find((s) => s.task === 'structure')
+        : steps.slice(0, i).reverse().find((s) => s.task === 'structure');
+    if (!source) {
+      fail(`step ${i + 1} is a ${step.task} step but has no structure step ${step.task === 'conclusion' ? 'after' : 'before'} it`);
+    }
+    step.answers = source!.answers;
+  });
+  steps.forEach((step, i) => {
+    if (step.task !== 'conclusion') return;
+    for (const a of step.answers) {
+      const c = claims[a.conclusion];
+      const introduced = isBank(c.source) ? c.bankStep! : c.source.segment;
+      if (introduced > i) fail(`step ${i + 1} asks for the main conclusion, but "${a.conclusion}" only appears in step ${introduced + 1}`);
+    }
+  });
+  if (file.rewording === 'none' && steps.some((s) => s.task === 'reword')) {
+    fail('a reword step needs `rewording: free` or `rewording: choose`');
+  }
 
   for (const [field, ids] of [
     ['modelWording', Object.keys(file.modelWording ?? {})],

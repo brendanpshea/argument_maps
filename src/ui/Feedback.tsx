@@ -7,9 +7,14 @@ interface Props {
   lesson: Lesson;
   map: ArgumentMap;
   result: GradeResult;
+  /** A reword step: compare every claim, and (free rewording) ask the student to confirm. */
+  rewordStep?: boolean;
+  conclusionStep?: boolean;
+  compared?: boolean;
+  onCompared?: () => void;
 }
 
-export function Feedback({ lesson, map, result }: Props) {
+export function Feedback({ lesson, map, result, rewordStep, conclusionStep, compared, onCompared }: Props) {
   const pct = result.possible ? Math.round((100 * result.earned) / result.possible) : 0;
   const scored = result.items.filter((i) => i.status !== 'note' && i.status !== 'correct');
   const notes = result.items.filter((i) => i.status === 'note');
@@ -17,18 +22,27 @@ export function Feedback({ lesson, map, result }: Props) {
   const modelReworded = Object.values(lesson.claims).filter(
     (c) => c.modelText !== c.passageText && map.nodes.some((n) => result.mapping[n.id] === c.id),
   );
-  const compare = [...new Set([...reworded.map((n) => result.mapping[n.id]), ...modelReworded.map((c) => c.id)])];
+  const compare = rewordStep
+    ? map.nodes.flatMap((n) => (result.mapping[n.id] ? [result.mapping[n.id]] : []))
+    : [...new Set([...reworded.map((n) => result.mapping[n.id]), ...modelReworded.map((c) => c.id)])];
+  const freeReword = rewordStep && lesson.rewording === 'free';
 
   return (
     <section className="feedback" aria-live="polite">
       <div className="score">
-        <span className="score-number">{pct}%</span>
-        <span>
-          {result.earned} / {result.possible} points
-        </span>
+        {!freeReword && (
+          <>
+            <span className="score-number">{pct}%</span>
+            <span>
+              {result.earned} / {result.possible} points
+            </span>
+          </>
+        )}
       </div>
-      {scored.length === 0 ? (
-        <p className="all-correct">Your map is correct.</p>
+      {freeReword ? null : scored.length === 0 ? (
+        <p className="all-correct">
+          {conclusionStep ? "Yes, that's the main conclusion." : rewordStep ? 'All claims are clearly worded.' : 'Your map is correct.'}
+        </p>
       ) : (
         <ul className="grade-items">
           {scored.map((item, i) => (
@@ -52,10 +66,14 @@ export function Feedback({ lesson, map, result }: Props) {
           </ul>
         </>
       )}
-      {scored.length > 0 && <p className="hint">Revise your map and check again.</p>}
+      {scored.length > 0 && (
+        <p className="hint">
+          {conclusionStep ? 'Pick another claim and check again.' : rewordStep ? 'Choose a better wording and check again.' : 'Revise your map and check again.'}
+        </p>
+      )}
       {/* Model wording could give away claims or structure, so it appears only once the map is right. */}
       {lesson.rewording === 'free' && scored.length === 0 && compare.length > 0 && (
-        <details className="wording">
+        <details className="wording" open={freeReword}>
           <summary>Compare your wording with the model wording</summary>
           <p className="hint">Wording isn't scored. A good restatement is clear on its own, keeps the author's meaning, and drops pronouns and filler.</p>
           <table>
@@ -74,6 +92,12 @@ export function Feedback({ lesson, map, result }: Props) {
               ))}
             </tbody>
           </table>
+          {freeReword && (
+            <label className="compared">
+              <input type="checkbox" checked={!!compared} disabled={compared} onChange={() => onCompared?.()} /> I've compared each of my
+              restatements with the model wording.
+            </label>
+          )}
         </details>
       )}
     </section>

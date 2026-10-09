@@ -96,26 +96,120 @@ function joinNames(names: string[]) {
 
 const uniq = <T,>(xs: T[]) => [...new Set(xs)];
 
-function gradeAgainst(lesson: Lesson, step: Step, map: ArgumentMap, rawAnswer: Answer): GradeResult {
-  const { mapping, duplicates } = matchNodes(lesson, map);
-  // Everything below works with canonical claim ids, so equivalent claims are interchangeable.
+/** An answer with every claim id replaced by its canonical id, so equivalent claims are interchangeable. */
+function canonicalAnswer(lesson: Lesson, raw: Answer) {
   const canon = (id: string) => canonical(lesson, id);
-  const answer = {
-    conclusion: canon(rawAnswer.conclusion),
-    relations: rawAnswer.relations.map((r) => ({ ...r, from: uniq(r.from.map(canon)), to: uniq(r.to.map(canon)) })),
+  return {
+    conclusion: canon(raw.conclusion),
+    relations: raw.relations.map((r) => ({ ...r, from: uniq(r.from.map(canon)), to: uniq(r.to.map(canon)) })),
   };
+}
+
+/** The claims a student must have for this answer (canonical ids). */
+function requiredClaims(answer: ReturnType<typeof canonicalAnswer>) {
+  return uniq([
+    answer.conclusion,
+    ...answer.relations.filter((r) => !r.optional).flatMap((r) => [...r.from, ...(r.to.length === 1 ? r.to : [])]),
+  ]);
+}
+
+/** Helpers for finding a claim's node and naming it in feedback. */
+function namer(lesson: Lesson, map: ArgumentMap, mapping: Record<string, string>) {
+  const canon = (id: string) => canonical(lesson, id);
   const nodeFor = (claimId: string) => map.nodes.find((n) => mapping[n.id] && canon(mapping[n.id]) === claimId);
   const name = (claimId: string) => {
     const node = nodeFor(claimId);
     const claim = lesson.claims[node ? mapping[node.id] : claimId];
     if (lesson.claimMode === 'marked' && !isBank(claim.source)) return `(${claim.number})`;
-    return `“${truncate(nodeFor(claimId)?.text ?? claim.modelText)}”`;
+    return `“${truncate(node?.text ?? claim.modelText)}”`;
   };
   const nodeName = (nodeId: string) => {
     const claimId = mapping[nodeId];
     if (claimId) return name(claimId);
     return `“${truncate(map.nodes.find((n) => n.id === nodeId)?.text ?? '?')}”`;
   };
+  return { canon, nodeFor, name, nodeName };
+}
+
+/** Wording is scored in reword steps if the lesson has any; otherwise alongside the structure. */
+export const hasRewordStep = (lesson: Lesson) => lesson.steps.some((s) => s.task === 'reword');
+
+function wordingItems(lesson: Lesson, map: ArgumentMap, mapping: Record<string, string>, claimIds: string[]): GradeItem[] {
+  const { nodeFor, name } = namer(lesson, map, mapping);
+  const items: GradeItem[] = [];
+  for (const id of claimIds) {
+    const node = nodeFor(id);
+    const choices = node && lesson.claims[mapping[node.id]].wordingChoices;
+    if (!node || !choices) continue;
+    const chosen = choices.find((c) => c.text === node.text);
+    if (chosen === choices[0]) {
+      items.push({ status: 'correct', earned: POINTS.wording, possible: POINTS.wording, message: `Clear wording for ${name(id)}.` });
+    } else if (chosen) {
+      items.push({ status: 'wrong', earned: 0, possible: POINTS.wording, message: `Wording of ${name(id)}: ${chosen.why ?? 'there is a clearer, more accurate wording.'}` });
+    } else {
+      items.push({ status: 'missing', earned: 0, possible: POINTS.wording, message: `Choose the clearest wording for ${name(id)} (the ✎ button).` });
+    }
+  }
+  return items;
+}
+
+const total = (items: GradeItem[], mapping: Record<string, string>): GradeResult => ({
+  earned: items.reduce((sum, i) => sum + i.earned, 0),
+  possible: items.reduce((sum, i) => sum + i.possible, 0),
+  items,
+  mapping,
+});
+
+/** A reword step: the map is fixed, so only wording counts. */
+function gradeWording(lesson: Lesson, map: ArgumentMap, raw: Answer): GradeResult {
+  const { mapping } = matchNodes(lesson, map);
+  if (lesson.rewording === 'free') {
+    // Free wording can't be scored; checking reveals the model wording to compare against.
+    return total([{ status: 'correct', earned: 1, possible: 1, message: 'Compare your wording with the model wording below.' }], mapping);
+  }
+  const items = wordingItems(lesson, map, mapping, requiredClaims(canonicalAnswer(lesson, raw)));
+  if (!items.length) items.push({ status: 'correct', earned: 1, possible: 1, message: 'No claims to reword here.' });
+  return total(items, mapping);
+}
+
+/** A conclusion step: did the student pick the main conclusion? Wrong picks get a hint based on the claim's role. */
+function gradeConclusion(lesson: Lesson, step: Step, map: ArgumentMap): GradeResult {
+  const { mapping } = matchNodes(lesson, map);
+  const { canon, nodeName } = namer(lesson, map, mapping);
+  const one = (status: ItemStatus, earned: number, message: string) => total([{ status, earned, possible: 1, message }], mapping);
+  if (!map.conclusion) return one('missing', 0, 'Pick the claim you think is the main conclusion.');
+  const claimId = mapping[map.conclusion];
+  if (!claimId) return one('wrong', 0, `${nodeName(map.conclusion)} doesn't match a claim in the passage. Select the whole claim.`);
+  const picked = canon(claimId);
+  if (step.answers.some((a) => canon(a.conclusion) === picked)) return one('correct', 1, `Yes: ${nodeName(map.conclusion)} is the main conclusion.`);
+
+  const custom = step.conclusionHints[claimId] ?? step.conclusionHints[picked];
+  if (custom) return one('wrong', 0, custom);
+  const answer = canonicalAnswer(lesson, step.answers[0]);
+  const premiseOf = (type: string) => answer.relations.filter((r) => r.type === type && r.from.includes(picked));
+  const objectionPremises = answer.relations.filter((r) => r.type === 'objection').flatMap((r) => r.from);
+  const objections = premiseOf('objection');
+  const supported = answer.relations.some((r) => r.to.includes(picked));
+  const subject = nodeName(map.conclusion);
+  let hint: string;
+  if (objections.some((r) => r.to.some((t) => objectionPremises.includes(t)))) {
+    hint = `${subject} answers an objection. What is the author's overall point?`;
+  } else if (objections.length) {
+    hint = `Is ${subject} the author's view, or a view the author is responding to?`;
+  } else if (premiseOf('support').length && supported) {
+    hint = `Something supports ${subject}, but it in turn supports another claim. Keep going: what is the author's final point?`;
+  } else if (premiseOf('support').length) {
+    hint = `${subject} is offered as a reason. What is it a reason for?`;
+  } else {
+    hint = `Does the author argue for ${subject}, or is it just setting the scene?`;
+  }
+  return one('wrong', 0, hint);
+}
+
+function gradeAgainst(lesson: Lesson, step: Step, map: ArgumentMap, rawAnswer: Answer): GradeResult {
+  const { mapping, duplicates } = matchNodes(lesson, map);
+  const { canon, nodeFor, name, nodeName } = namer(lesson, map, mapping);
+  const answer = canonicalAnswer(lesson, rawAnswer);
   const verb = (r: { type: string }) => (r.type === 'support' ? 'supports' : 'objects to');
 
   const items: GradeItem[] = [];
@@ -137,10 +231,7 @@ function gradeAgainst(lesson: Lesson, step: Step, map: ArgumentMap, rawAnswer: A
 
   // Claims
   // Required: the conclusion, the premises of required links, and targets that have no alternative.
-  const answerClaims = uniq([
-    answer.conclusion,
-    ...answer.relations.filter((r) => !r.optional).flatMap((r) => [...r.from, ...(r.to.length === 1 ? r.to : [])]),
-  ]);
+  const answerClaims = requiredClaims(answer);
   // Anything the answer mentions at all (optional links, alternative targets) is part of the argument.
   const argumentClaims = uniq([answer.conclusion, ...answer.relations.flatMap((r) => [...r.from, ...r.to])]);
   const missing = answerClaims.filter((id) => !nodeFor(id));
@@ -166,22 +257,8 @@ function gradeAgainst(lesson: Lesson, step: Step, map: ArgumentMap, rawAnswer: A
     });
   }
 
-  // Wording (only when students choose from the author's wordings)
-  if (lesson.rewording === 'choose') {
-    for (const id of answerClaims) {
-      const node = nodeFor(id);
-      const choices = node && lesson.claims[mapping[node.id]].wordingChoices;
-      if (!node || !choices) continue;
-      const chosen = choices.find((c) => c.text === node.text);
-      if (chosen === choices[0]) {
-        items.push({ status: 'correct', earned: POINTS.wording, possible: POINTS.wording, message: `Clear wording for ${name(id)}.` });
-      } else if (chosen) {
-        items.push({ status: 'wrong', earned: 0, possible: POINTS.wording, message: `Wording of ${name(id)}: ${chosen.why ?? 'there is a clearer, more accurate wording.'}` });
-      } else {
-        items.push({ status: 'missing', earned: 0, possible: POINTS.wording, message: `Choose the clearest wording for ${name(id)} (the ✎ button).` });
-      }
-    }
-  }
+  // Wording (only when students choose from the author's wordings, and the lesson has no reword step)
+  if (lesson.rewording === 'choose' && !hasRewordStep(lesson)) items.push(...wordingItems(lesson, map, mapping, answerClaims));
 
   // Relations
   const student = map.relations.map((r) => ({
@@ -319,14 +396,14 @@ function gradeAgainst(lesson: Lesson, step: Step, map: ArgumentMap, rawAnswer: A
     }
   }
 
-  const earned = items.reduce((sum, i) => sum + i.earned, 0);
-  const possible = items.reduce((sum, i) => sum + i.possible, 0);
-  return { earned, possible, items, mapping };
+  return total(items, mapping);
 }
 
 /** Grades a student's map for one step against every acceptable answer and returns the best result. */
 export function gradeStep(lesson: Lesson, stepIndex: number, map: ArgumentMap): GradeResult {
   const step = lesson.steps[stepIndex];
-  const results = step.answers.map((a) => gradeAgainst(lesson, step, map, a));
-  return results.reduce((best, r) => (r.earned / r.possible > best.earned / best.possible ? r : best));
+  if (step.task === 'conclusion') return gradeConclusion(lesson, step, map);
+  const grade = step.task === 'reword' ? (a: Answer) => gradeWording(lesson, map, a) : (a: Answer) => gradeAgainst(lesson, step, map, a);
+  const fraction = (r: GradeResult) => (r.possible ? r.earned / r.possible : 0);
+  return step.answers.map(grade).reduce((best, r) => (fraction(r) > fraction(best) ? r : best));
 }

@@ -30,6 +30,10 @@ the browser, with no server.
 5. Multi-step lessons add new text (evidence, objections, replies) at each
    step. Getting a step fully right unlocks the next, and the student's map
    carries forward.
+6. Lessons can be **scaffolded** one skill at a time: first find the main
+   conclusion (wrong picks get a hint based on the role that claim plays),
+   then map the argument, then restate the claims clearly on the finished,
+   locked map.
 
 Students can also use an **outline view** to do everything with the keyboard,
 **download** their map as a PNG or as a map file they can load again later,
