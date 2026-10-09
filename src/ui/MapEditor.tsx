@@ -27,6 +27,7 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { toPng } from 'html-to-image';
+import { badgeText, INDUCTIVE_DASH, optionLabel } from '../model/evaluationStyle';
 import { vocab } from '../model/vocab';
 import { QUALITIES, type LessonKind, type ArgumentMap, type Evaluation, type InferenceQuality, type InferenceType, type MapRelation, type RelationType } from '../model/types';
 import { autoLayout, CLAIM_SIZE, JUNCTION_SIZE } from '../model/layout';
@@ -215,7 +216,7 @@ function JunctionNode({ id, data, selected }: NodeProps<JunctionNodeT>) {
         {data.label}
       </button>
       {ev?.type ? (
-        <span className="eval-badge">{[ev.type, ev.quality].filter(Boolean).join(' · ')}</span>
+        <span className={`eval-badge ${ev.type}`}>{badgeText(ev)}</span>
       ) : (
         data.evaluate && <span className="eval-badge todo">evaluate?</span>
       )}
@@ -291,7 +292,7 @@ export function EvaluationPicker({
       <legend>{legend}</legend>
       {options.map((o) => (
         <button key={o} role="radio" aria-checked={current === o} className={current === o ? 'on' : ''} onClick={() => pick(o)}>
-          {o}
+          {optionLabel(o as InferenceType | InferenceQuality)}
         </button>
       ))}
     </fieldset>
@@ -450,6 +451,9 @@ function buildEdges(map: ArgumentMap, prev: Edge[], readOnly: boolean, kind: Les
   return map.relations.flatMap((r): LinkEdgeT[] => {
     const stroke = COLORS[r.type];
     const linked = r.from.length > 1;
+    // Once a link has been evaluated as inductive, it's drawn dashed with an open arrowhead.
+    const inductive = r.evaluation?.type === 'inductive';
+    const style = inductive ? { stroke, strokeDasharray: INDUCTIVE_DASH } : { stroke };
     return [
       ...r.from.map((f): LinkEdgeT => ({
         id: `p|${r.id}|${f}`,
@@ -457,7 +461,7 @@ function buildEdges(map: ArgumentMap, prev: Edge[], readOnly: boolean, kind: Les
         source: f,
         target: r.id,
         ...handles(f, r.id),
-        style: { stroke },
+        style,
         selected: selected.has(`p|${r.id}|${f}`),
         data: { readOnly, title: linked ? vocab(kind).removeFromLink : 'Delete this link' },
       })),
@@ -467,8 +471,10 @@ function buildEdges(map: ArgumentMap, prev: Edge[], readOnly: boolean, kind: Les
         source: r.id,
         target: r.to,
         ...handles(r.id, r.to),
-        style: { stroke },
-        markerEnd: { type: MarkerType.ArrowClosed, color: stroke },
+        style,
+        markerEnd: inductive
+          ? { type: MarkerType.Arrow, color: stroke, width: 22, height: 22, strokeWidth: 1.6 }
+          : { type: MarkerType.ArrowClosed, color: stroke },
         selected: selected.has(`o|${r.id}`),
         data: { readOnly, title: 'Delete this link' },
       },

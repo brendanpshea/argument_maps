@@ -210,6 +210,11 @@ label (or the outline view):
 - Each link scores a point for the type and a point for the quality. A wrong
   type earns neither.
 - Links you don't list aren't asked about.
+- Once a student evaluates a link, it changes style so the type doesn't rely
+  on colour: deductive links stay solid (filled arrowhead, square "∴" badge);
+  inductive links turn dashed (open arrowhead, rounded "≈" badge). ✓ and ✗
+  mark the quality. Unevaluated links stay solid, so the style never gives
+  the answer away.
 
 See `butler.yaml` for an example with one link of each kind.
 
