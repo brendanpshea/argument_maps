@@ -1,4 +1,5 @@
 import dagre from '@dagrejs/dagre';
+import { badgeText, INDUCTIVE_DASH, QUALITY_SYMBOL, TYPE_SYMBOL } from '../model/evaluationStyle';
 import { vocab } from '../model/vocab';
 import type { Diagram, DiagramLink } from './model';
 
@@ -72,18 +73,20 @@ export function renderDiagramSvg(d: Diagram): string {
   }
   d.links.forEach((l, i) => {
     const label = linkLabel(d, l).toUpperCase();
-    const badge = l.evaluation?.type ? [l.evaluation.type, l.evaluation.quality].filter(Boolean).join(' · ') : '';
-    const width = Math.max(label.length * 8 + 26, badge.length * 6.5 + 18);
+    const badge = l.evaluation ? badgeText(l.evaluation) : '';
+    const width = Math.max(label.length * 8 + 26, badgeWidth(badge) + 4);
     g.setNode(`link${i}`, { width, height: badge ? 46 : 26 });
     for (const f of l.from) g.setEdge(f, `link${i}`);
     g.setEdge(`link${i}`, l.to);
   });
   dagre.layout(g);
 
+  // Filled arrowheads for most links; open ones for inductive links.
   const markers = (['support', 'objection', 'explanation'] as const)
     .map(
       (t) =>
-        `<marker id="arrow-${t}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="${COLOR[t]}"/></marker>`,
+        `<marker id="arrow-${t}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="${COLOR[t]}"/></marker>` +
+        `<marker id="arrow-${t}-open" viewBox="0 0 12 12" refX="10" refY="6" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M1,1 L10,6 L1,11 z" fill="#ffffff" stroke="${COLOR[t]}" stroke-width="1.6" stroke-linejoin="round"/></marker>`,
     )
     .join('');
 
@@ -92,20 +95,26 @@ export function renderDiagramSvg(d: Diagram): string {
     const id = `link${i}`;
     const n = g.node(id);
     const color = COLOR[l.type];
+    // Inductive links are dashed with an open arrowhead; everything else is solid with a filled one.
+    const inductive = l.evaluation?.type === 'inductive';
+    const dash = inductive ? ` stroke-dasharray="${INDUCTIVE_DASH}"` : '';
+    const marker = `url(#arrow-${l.type}${inductive ? '-open' : ''})`;
     const lines = [
-      ...l.from.map((f) => `<path d="${pathThrough(g.edge(f, id).points)}" fill="none" stroke="${color}" stroke-width="2.5"/>`),
-      `<path d="${pathThrough(g.edge(id, l.to).points)}" fill="none" stroke="${color}" stroke-width="2.5" marker-end="url(#arrow-${l.type})"/>`,
+      ...l.from.map((f) => `<path d="${pathThrough(g.edge(f, id).points)}" fill="none" stroke="${color}" stroke-width="2.5"${dash}/>`),
+      `<path d="${pathThrough(g.edge(id, l.to).points)}" fill="none" stroke="${color}" stroke-width="2.5"${dash} marker-end="${marker}"/>`,
     ];
     const label = linkLabel(d, l).toUpperCase();
-    const badge = l.evaluation?.type ? [l.evaluation.type, l.evaluation.quality].filter(Boolean).join(' · ') : '';
+    const badge = l.evaluation ? badgeText(l.evaluation) : '';
     const pillW = label.length * 8 + 26;
     const pillY = n.y - n.height / 2;
     const pill =
       `<rect x="${n.x - pillW / 2}" y="${pillY}" width="${pillW}" height="26" rx="13" fill="${PILL_FILL[l.type]}" stroke="${color}" stroke-width="2"/>` +
       `<text x="${n.x}" y="${pillY + 17.5}" text-anchor="middle" font-size="12" font-weight="700" letter-spacing="0.5" fill="${color}">${esc(label)}</text>`;
+    // Badge shape echoes the type: square corners for deductive, rounded for inductive.
+    const bw = badgeWidth(badge);
     const badgeEl = badge
-      ? `<rect x="${n.x - (badge.length * 6.5 + 14) / 2}" y="${pillY + 29}" width="${badge.length * 6.5 + 14}" height="17" rx="8.5" fill="#fff" stroke="#c9c6bf"/>` +
-        `<text x="${n.x}" y="${pillY + 41.5}" text-anchor="middle" font-size="11" font-weight="600" fill="#1f2328">${esc(badge)}</text>`
+      ? `<rect x="${n.x - bw / 2}" y="${pillY + 29}" width="${bw}" height="18" rx="${inductive ? 9 : 1.5}" fill="#fff" stroke="#6f747c" stroke-width="1.2"${inductive ? ` stroke-dasharray="3 2"` : ''}/>` +
+        `<text x="${n.x}" y="${pillY + 42}" text-anchor="middle" font-size="11.5" font-weight="600" fill="#1f2328">${esc(badge)}</text>`
       : '';
     return fragment(l.step, lines.join('') + pill + badgeEl);
   });
@@ -133,12 +142,40 @@ export function renderDiagramSvg(d: Diagram): string {
   });
 
   const { width, height } = g.graph() as { width: number; height: number };
-  const w = Math.ceil(width);
-  const h = Math.ceil(height);
+  // Diagrams with evaluated links get a key along the bottom.
+  const key = d.links.some((l) => l.evaluation?.type) ? legend(Math.ceil(height) + 6) : null;
+  const w = Math.ceil(Math.max(width, key?.width ?? 0));
+  const h = Math.ceil(height) + (key ? 40 : 0);
   return (
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" style="--w:${w}" font-family="${esc(FONT)}" role="img" aria-label="${esc(describe(d))}">` +
-    `<defs>${markers}</defs>${claimEls.join('')}${linkEls.join('')}</svg>`
+    `<defs>${markers}</defs>${claimEls.join('')}${linkEls.join('')}${key?.svg ?? ''}</svg>`
   );
+}
+
+const badgeWidth = (text: string) => (text ? text.length * 6.9 + 16 : 0);
+
+/** The key for evaluated links: line styles for the types, symbols for the qualities. */
+function legend(y: number): { svg: string; width: number } {
+  const ink = '#3d434b';
+  const items: string[] = [];
+  let x = 12;
+  const sample = (dash: boolean, open: boolean, label: string) => {
+    const line = `<line x1="${x}" y1="${y + 14}" x2="${x + 38}" y2="${y + 14}" stroke="${ink}" stroke-width="2.5"${dash ? ` stroke-dasharray="${INDUCTIVE_DASH}"` : ''}/>`;
+    const head = open
+      ? `<path d="M${x + 38},${y + 8} L${x + 48},${y + 14} L${x + 38},${y + 20} z" fill="#fff" stroke="${ink}" stroke-width="1.6" stroke-linejoin="round"/>`
+      : `<path d="M${x + 38},${y + 9} L${x + 48},${y + 14} L${x + 38},${y + 19} z" fill="${ink}"/>`;
+    items.push(line + head + `<text x="${x + 56}" y="${y + 18}" font-size="13" fill="${ink}">${esc(label)}</text>`);
+    x += 56 + label.length * 7.4 + 26;
+  };
+  const text = (label: string) => {
+    items.push(`<text x="${x}" y="${y + 18}" font-size="13" fill="${ink}">${esc(label)}</text>`);
+    x += label.length * 7.4 + 26;
+  };
+  sample(false, false, `${TYPE_SYMBOL.deductive} deductive`);
+  sample(true, true, `${TYPE_SYMBOL.inductive} inductive`);
+  text(`${QUALITY_SYMBOL.valid} valid / strong`);
+  text(`${QUALITY_SYMBOL.invalid} invalid / weak`);
+  return { svg: `<g class="argmap-legend" aria-hidden="true">${items.join('')}</g>`, width: x };
 }
 
 /** A plain-text description of the diagram for screen readers. */
@@ -146,6 +183,9 @@ export function describe(d: Diagram): string {
   const text = (id: string) => d.claims.find((c) => c.id === id)?.text ?? id;
   const V = vocab(d.kind);
   const parts = d.conclusion ? [`${V.Conclusion}: ${text(d.conclusion)}.`] : [];
-  for (const l of d.links) parts.push(`${l.from.map(text).join(' and ')} ${linkLabel(d, l)} ${text(l.to)}.`);
+  for (const l of d.links) {
+    const judged = l.evaluation?.type ? ` (${[l.evaluation.type, l.evaluation.quality].filter(Boolean).join(', ')})` : '';
+    parts.push(`${l.from.map(text).join(' and ')} ${linkLabel(d, l)} ${text(l.to)}${judged}.`);
+  }
   return parts.join(' ');
 }

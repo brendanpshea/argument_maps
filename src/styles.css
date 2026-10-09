@@ -251,3 +251,8 @@ details > summary { cursor: pointer; color: var(--accent); }
 /* Explanation lessons */
 .junction-explanation button { background: #efeafa; border: 2px solid #5b3fa8; color: #5b3fa8; }
 .outline strong.explanation { color: #5b3fa8; }
+
+/* Evaluation badges: square corners for deductive, rounded and dashed for inductive (not colour alone). */
+.eval-badge.deductive { border-radius: 2px; border-color: #6f747c; }
+.eval-badge.inductive { border-radius: 999px; border-style: dashed; border-color: #6f747c; }
+.eval-group button { text-transform: none !important; }

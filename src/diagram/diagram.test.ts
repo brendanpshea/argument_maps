@@ -58,6 +58,9 @@ describe('argmap syntax', () => {
     expect(svg).toContain('class="fragment" data-fragment-index="2"');
     expect(svg).toContain('SUPPORTS');
     expect(svg).toContain('MAIN CONCLUSION');
+    // No evaluations, no key and no dashes.
+    expect(svg).not.toContain('argmap-legend');
+    expect(svg).not.toContain('stroke-dasharray');
   });
 });
 
@@ -72,7 +75,9 @@ describe('decks', () => {
 
   it('renders lesson references, including evaluation badges and explanations', () => {
     const deck = buildDeck('t', '```argmap lesson=butler\n```\n\n```argmap lesson=autumn-leaves step=2\n```\n\n```argmap lesson=nope\n```', (id) => lessons.get(id));
-    expect(deck.diagrams[0].svg).toContain('deductive · invalid');
+    expect(deck.diagrams[0].svg).toContain('∴ deductive · ✗ invalid');
+    expect(deck.diagrams[0].svg).toContain('stroke-dasharray'); // inductive links are dashed
+    expect(deck.diagrams[0].svg).toContain('argmap-legend');
     expect(deck.diagrams[0].svg).toContain('The butler is the thief'); // capitalised for display
     expect(deck.diagrams[1].svg).toContain('EXPLAINS');
     expect(deck.diagrams[1].svg).toContain('EXPLANANDUM');
