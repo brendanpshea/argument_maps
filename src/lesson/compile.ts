@@ -55,14 +55,19 @@ export function compileLesson(yamlSource: string, fileName = 'lesson'): Lesson {
         if (!claims[id]) fail(`step ${segment + 1} ${label} refers to "${id}", which is not marked in this or an earlier step`);
       };
       check(a.conclusion);
-      for (const r of a.relations) {
+      const relations = a.relations.map((r) => ({
+        type: relationType(r.type),
+        from: [...r.from],
+        to: Array.isArray(r.to) ? [...r.to] : [r.to],
+        grouping: r.grouping,
+        optional: r.optional,
+      }));
+      for (const r of relations) {
         r.from.forEach(check);
-        check(r.to);
+        r.to.forEach(check);
+        if (r.from.some((f) => r.to.includes(f))) fail(`step ${segment + 1} ${label}: a claim can't bear on itself`);
       }
-      return {
-        conclusion: a.conclusion,
-        relations: a.relations.map((r) => ({ type: relationType(r.type), from: [...r.from], to: r.to })),
-      };
+      return { conclusion: a.conclusion, relations };
     };
 
     steps.push({
@@ -88,6 +93,14 @@ export function compileLesson(yamlSource: string, fileName = 'lesson'): Lesson {
       if (!claims[id] || claims[id].bankStep !== undefined) fail(`${field} has "${id}", which is not marked in the passage`);
     }
   }
+  const equivalent: Record<string, string> = {};
+  for (const group of file.equivalent ?? []) {
+    for (const id of group) {
+      if (!claims[id]) fail(`equivalent lists "${id}", which is not a claim in this lesson`);
+      if (equivalent[id]) fail(`claim "${id}" appears in more than one equivalent set`);
+      equivalent[id] = group[0];
+    }
+  }
   if (file.wordingChoices && file.rewording !== 'choose') {
     fail('wordingChoices are only used with `rewording: choose`');
   }
@@ -99,6 +112,7 @@ export function compileLesson(yamlSource: string, fileName = 'lesson'): Lesson {
     claimMode: file.claimMode,
     rewording: file.rewording,
     claims,
+    equivalent,
     steps,
   };
 }

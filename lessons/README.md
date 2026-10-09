@@ -49,8 +49,6 @@ note, not a penalty.
   - `from`: one premise, or several premises that work **together** (a
     linked argument). Premises that each give an independent reason
     (convergent) go in separate relations.
-- `alternatives`: other answers that also earn full credit. Students are graded
-  against whichever answer suits their map best.
 - `mistakes`: feedback for specific wrong links you expect. Students never
   see the model answer, so write these as hints (a question that points them
   back to the text), not as the correct answer. For example:
@@ -60,14 +58,60 @@ note, not a penalty.
       message: Does (3) bear on the conclusion directly, or on another premise?
   ```
 
+## Accepting more than one map
+
+Arguments are often open to more than one reasonable reading. Mark each
+judgment call where it occurs, rather than writing out whole alternative maps:
+
+```yaml
+equivalent:
+  - [c1, c5]        # c5 restates c1, so either can stand in for the other
+
+steps:
+  - answer:
+      conclusion: c1
+      relations:
+        - { type: support, from: [c2, c3], to: c1, grouping: either }  # linked or convergent
+        - { type: objection, from: [c6], to: [c1, c2] }                 # either target is fine
+        - { type: support, from: [c7], to: c1, optional: true }         # fine to include or leave out
+```
+
+| Annotation | Accepts |
+|---|---|
+| `grouping: either` | The premises linked, all independent, or any mix. |
+| `to: [a, b]` | A link to any one of the listed claims. |
+| `optional: true` | The link with or without it. If present, it must be right; it earns no extra points. |
+| `equivalent` (lesson level) | Any claim in a set in place of any other, everywhere: as conclusion, premise, or target. A student who adds both gets a "repeats a claim" note. |
+
+The annotations combine freely, so two judgment calls are two annotations,
+not four whole maps.
+
+For genuinely different readings of the whole argument, `alternatives` lists
+other complete answers. The student is graded against whichever fits their
+map best, and the hints come from that answer.
+
+```yaml
+    alternatives:
+      - conclusion: c1
+        relations: [...]
+```
+
+`npm test` grades every map your annotations accept (each grouping, each
+target, optional links in and out) and fails if any of them scores below
+100%.
+
 ## Multi-step lessons
 
 Each step adds text to the passage, and its `answer` is the **whole** map
 after that step (not just what changed). Claims from earlier steps can be
 used in later answers. A student unlocks the next step only by getting the
-current one fully right, and their map carries forward. If a step accepts
-`alternatives`, make sure every later step accepts the same alternatives
-extended with the new material.
+current one fully right, and their map carries forward.
+
+So every reading you accept in one step must still be accepted in the next.
+Copy the annotated relation (e.g. with `grouping: either`) into each later
+step's answer, along with any `alternatives`. `npm test` checks this: it takes
+every map accepted at step N, adds the new material from step N+1, and fails
+if step N+1 would mark it wrong.
 
 ## Students never see the answer
 

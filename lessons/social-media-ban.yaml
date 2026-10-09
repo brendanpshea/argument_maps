@@ -27,13 +27,8 @@ steps:
     answer:
       conclusion: s1
       relations:
-        - { type: support, from: [s2, s3], to: s1 }
-    alternatives:
-      # Reading the premises as independent reasons is also defensible.
-      - conclusion: s1
-        relations:
-          - { type: support, from: [s2], to: s1 }
-          - { type: support, from: [s3], to: s1 }
+        # Reading these premises as linked or as independent reasons is defensible.
+        - { type: support, from: [s2, s3], to: s1, grouping: either }
 
   - title: New evidence
     instructions: >
@@ -45,14 +40,8 @@ steps:
     answer:
       conclusion: s1
       relations:
-        - { type: support, from: [s2, s3], to: s1 }
+        - { type: support, from: [s2, s3], to: s1, grouping: either }
         - { type: support, from: [s4], to: s2 }
-    alternatives:
-      - conclusion: s1
-        relations:
-          - { type: support, from: [s2], to: s1 }
-          - { type: support, from: [s3], to: s1 }
-          - { type: support, from: [s4], to: s2 }
     mistakes:
       - relation: { type: support, from: [s4], to: s1 }
         message: >
@@ -70,18 +59,10 @@ steps:
     answer:
       conclusion: s1
       relations:
-        - { type: support, from: [s2, s3], to: s1 }
+        - { type: support, from: [s2, s3], to: s1, grouping: either }
         - { type: support, from: [s4], to: s2 }
         - { type: objection, from: [s5], to: s1 }
         - { type: rebuttal, from: [s6], to: s5 }
-    alternatives:
-      - conclusion: s1
-        relations:
-          - { type: support, from: [s2], to: s1 }
-          - { type: support, from: [s3], to: s1 }
-          - { type: support, from: [s4], to: s2 }
-          - { type: objection, from: [s5], to: s1 }
-          - { type: rebuttal, from: [s6], to: s5 }
     mistakes:
       - relation: { type: support, from: [s6], to: s1 }
         message: >

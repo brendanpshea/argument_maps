@@ -4,7 +4,8 @@ import { describe, expect, it } from 'vitest';
 import { compileLesson } from '../lesson/compile';
 import { parsePassage } from '../lesson/passage';
 import { mapFromAnswer } from '../model/layout';
-import type { ArgumentMap, Claim, Lesson, MapNode, Span } from '../model/types';
+import { asAnswer, expandVariants } from '../lesson/variants';
+import { isBank, type ArgumentMap, type Claim, type Lesson, type MapNode, type Span } from '../model/types';
 import { gradeStep } from './grade';
 
 const lessonsDir = join(__dirname, '../../lessons');
@@ -12,14 +13,41 @@ const lessonFiles = readdirSync(lessonsDir).filter((f) => /\.ya?ml$/.test(f));
 const load = (file: string) => compileLesson(readFileSync(join(lessonsDir, file), 'utf8'), file);
 
 describe('lesson files', () => {
-  it.each(lessonFiles)('%s is valid and its model answers earn full marks', (file) => {
+  it.each(lessonFiles)('%s is valid and every accepted variant earns full marks', (file) => {
     const lesson = load(file);
     lesson.steps.forEach((step, i) => {
       for (const answer of step.answers) {
-        const result = gradeStep(lesson, i, mapFromAnswer(lesson, answer));
-        expect(result.earned).toBe(result.possible);
+        for (const variant of expandVariants(answer)) {
+          const result = gradeStep(lesson, i, mapFromAnswer(lesson, asAnswer(variant)));
+          expect(result.earned, `step ${i + 1}: ${JSON.stringify(variant)}`).toBe(result.possible);
+        }
       }
     });
+  });
+
+  // A student who got step N right carries their map into step N+1. Every map accepted at
+  // step N, extended with the new material from step N+1's answer, must be accepted there too;
+  // otherwise that student would be told a correct earlier choice is now wrong.
+  it.each(lessonFiles)('%s never strands a student between steps', (file) => {
+    const lesson = load(file);
+    for (let i = 0; i + 1 < lesson.steps.length; i++) {
+      const isNew = (id: string) => {
+        const c = lesson.claims[id];
+        return isBank(c.source) ? c.bankStep === i + 1 : c.source.segment === i + 1;
+      };
+      const next = expandVariants(lesson.steps[i + 1].answers[0])[0];
+      const added = next.relations.filter((r) => [...r.from, r.to].some(isNew));
+      for (const answer of lesson.steps[i].answers) {
+        for (const variant of expandVariants(answer)) {
+          const extended = {
+            conclusion: isNew(next.conclusion) ? next.conclusion : variant.conclusion,
+            relations: [...variant.relations, ...added],
+          };
+          const result = gradeStep(lesson, i + 1, mapFromAnswer(lesson, asAnswer(extended)));
+          expect(result.earned, `step ${i + 1} → ${i + 2}: ${JSON.stringify(variant)}`).toBe(result.possible);
+        }
+      }
+    }
   });
 });
 
@@ -138,10 +166,19 @@ describe('gradeStep', () => {
     expect(notes[0].message).toMatch(/isn't part of the argument/);
   });
 
-  it('uses the alternative answer when it scores better', () => {
-    const lesson = load('social-media-ban.yaml');
-    const alt = lesson.steps[0].answers[1];
-    const result = gradeStep(lesson, 0, mapFromAnswer(lesson, alt));
+  it('uses an alternative answer when it scores better', () => {
+    const yaml = `
+id: alt
+title: Alt
+steps:
+  - instructions: x
+    passage: "{{a|A}} so {{b|B}} so {{c|C}}"
+    answer: { conclusion: c, relations: [{ type: support, from: [a], to: b }, { type: support, from: [b], to: c }] }
+    alternatives:
+      - { conclusion: c, relations: [{ type: support, from: [a], to: c }, { type: support, from: [b], to: c }] }
+`;
+    const lesson = compileLesson(yaml);
+    const result = gradeStep(lesson, 0, mapFromAnswer(lesson, lesson.steps[0].answers[1]));
     expect(result.earned).toBe(result.possible);
   });
 });
@@ -234,5 +271,101 @@ describe('linking and splitting premises', () => {
     const supports = split.relations.filter((r) => r.type === 'support');
     expect(supports.map((r) => r.from)).toEqual([['a'], ['b']]);
     expect(supports.every((r) => r.to === 'c')).toBe(true);
+  });
+});
+
+describe('answer leeway', () => {
+  const yaml = `
+id: leeway
+title: Leeway
+equivalent: [[c, c2]]
+steps:
+  - instructions: x
+    passage: "{{c|We should act}}. {{p1|P1}}. {{p2|P2}}. {{p3|P3}}. {{o|O}}. {{x|X}}. In short, {{c2|we must act}}."
+    answer:
+      conclusion: c
+      relations:
+        - { type: support, from: [p1, p2, p3], to: c, grouping: either }
+        - { type: objection, from: [o], to: [c, p1] }
+        - { type: support, from: [x], to: c, optional: true }
+`;
+  const lesson = compileLesson(yaml);
+  const node = (id: string, nodeId = id): MapNode => ({ id: nodeId, text: id, source: lesson.claims[id].source, position: { x: 0, y: 0 } });
+  const base = (relations: ArgumentMap['relations'], conclusion = 'c', extra: MapNode[] = []): ArgumentMap => ({
+    nodes: [node(conclusion), ...['p1', 'p2', 'p3', 'o'].map((id) => node(id)), ...extra],
+    relations,
+    conclusion,
+  });
+  const score = (m: ArgumentMap) => {
+    const r = gradeStep(lesson, 0, m);
+    return r.earned / r.possible;
+  };
+  const objection = { id: 'ro', type: 'objection' as const, from: ['o'], to: 'c' };
+
+  it('grouping: either accepts linked, convergent, and mixed groupings', () => {
+    const linked = base([{ id: 'r', type: 'support', from: ['p1', 'p2', 'p3'], to: 'c' }, objection]);
+    const convergent = base([
+      { id: 'r1', type: 'support', from: ['p1'], to: 'c' },
+      { id: 'r2', type: 'support', from: ['p2'], to: 'c' },
+      { id: 'r3', type: 'support', from: ['p3'], to: 'c' },
+      objection,
+    ]);
+    const mixed = base([
+      { id: 'r1', type: 'support', from: ['p1', 'p2'], to: 'c' },
+      { id: 'r3', type: 'support', from: ['p3'], to: 'c' },
+      objection,
+    ]);
+    expect([score(linked), score(convergent), score(mixed)]).toEqual([1, 1, 1]);
+  });
+
+  it('grouping: either still notices a premise left out', () => {
+    const partial = base([{ id: 'r', type: 'support', from: ['p1', 'p2'], to: 'c' }, objection]);
+    expect(score(partial)).toBeLessThan(1);
+  });
+
+  it('accepts any listed target', () => {
+    const toPremise = base([{ id: 'r', type: 'support', from: ['p1', 'p2', 'p3'], to: 'c' }, { ...objection, to: 'p1' }]);
+    expect(score(toPremise)).toBe(1);
+    const toOther = base([{ id: 'r', type: 'support', from: ['p1', 'p2', 'p3'], to: 'c' }, { ...objection, to: 'p2' }]);
+    expect(score(toOther)).toBeLessThan(1);
+  });
+
+  it('optional links are neither required nor flagged when present', () => {
+    const without = base([{ id: 'r', type: 'support', from: ['p1', 'p2', 'p3'], to: 'c' }, objection]);
+    const withX = base(
+      [{ id: 'r', type: 'support', from: ['p1', 'p2', 'p3'], to: 'c' }, objection, { id: 'rx', type: 'support', from: ['x'], to: 'c' }],
+      'c',
+      [node('x')],
+    );
+    expect(score(without)).toBe(1);
+    const result = gradeStep(lesson, 0, withX);
+    expect(result.earned).toBe(result.possible);
+    expect(result.items.filter((i) => i.status === 'note')).toEqual([]);
+  });
+
+  it('equivalent claims are interchangeable, and adding both is a duplicate', () => {
+    const restated = base([{ id: 'r', type: 'support', from: ['p1', 'p2', 'p3'], to: 'c2' }, { ...objection, to: 'c2' }], 'c2');
+    expect(score(restated)).toBe(1);
+    const both = base([{ id: 'r', type: 'support', from: ['p1', 'p2', 'p3'], to: 'c' }, objection], 'c', [node('c2')]);
+    expect(gradeStep(lesson, 0, both).items.some((i) => /repeats a claim/.test(i.message))).toBe(true);
+  });
+
+  it('expands variants for the CI checks', () => {
+    // 2 groupings × 2 targets × (optional in/out) = 8
+    expect(expandVariants(lesson.steps[0].answers[0])).toHaveLength(8);
+  });
+
+  it('rejects bad equivalent sets', () => {
+    const bad = (eq: string) => `
+id: bad
+title: Bad
+equivalent: ${eq}
+steps:
+  - instructions: x
+    passage: "{{a|A}} {{b|B}} {{c|C}}"
+    answer: { conclusion: a, relations: [] }
+`;
+    expect(() => compileLesson(bad('[[a, zz]]'))).toThrow(/"zz"/);
+    expect(() => compileLesson(bad('[[a, b], [b, c]]'))).toThrow(/more than one equivalent set/);
   });
 });

@@ -48,9 +48,21 @@ export interface Relation {
   to: string;
 }
 
+/** A link in a model answer, with the leeway the author allows. */
+export interface AnswerRelation {
+  type: RelationType;
+  from: string[];
+  /** Acceptable targets: any one of these is correct. */
+  to: string[];
+  /** `either`: the premises may be grouped any way (linked, convergent, or a mix). */
+  grouping: 'exact' | 'either';
+  /** Accepted if present, but not required. */
+  optional: boolean;
+}
+
 export interface Answer {
   conclusion: string;
-  relations: Relation[];
+  relations: AnswerRelation[];
 }
 
 export interface Mistake {
@@ -74,6 +86,8 @@ export interface Lesson {
   claimMode: 'marked' | 'highlight';
   rewording: RewordingMode;
   claims: Record<string, Claim>;
+  /** Claim id -> representative of its `equivalent` set (only claims in a set appear). */
+  equivalent: Record<string, string>;
   steps: Step[];
 }
 

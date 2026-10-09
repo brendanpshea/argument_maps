@@ -32,7 +32,8 @@ export function autoLayout(map: ArgumentMap): ArgumentMap {
 
 /** Builds a map from a lesson answer, using the model wording for each claim. */
 export function mapFromAnswer(lesson: Lesson, answer: Answer): ArgumentMap {
-  const ids = [...new Set([answer.conclusion, ...answer.relations.flatMap((r) => [...r.from, r.to])])];
+  // Use the first acceptable target of each link.
+  const ids = [...new Set([answer.conclusion, ...answer.relations.flatMap((r) => [...r.from, r.to[0]])])];
   return autoLayout({
     nodes: ids.map((id) => ({
       id: `n-${id}`,
@@ -44,7 +45,7 @@ export function mapFromAnswer(lesson: Lesson, answer: Answer): ArgumentMap {
       id: `r-${i}`,
       type: r.type,
       from: r.from.map((f) => `n-${f}`),
-      to: `n-${r.to}`,
+      to: `n-${r.to[0]}`,
     })),
     conclusion: `n-${answer.conclusion}`,
   });
