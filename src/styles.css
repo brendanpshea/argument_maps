@@ -230,3 +230,20 @@ details > summary { cursor: pointer; color: var(--accent); }
 .conclusion-card p.hint { font-size: 0.85rem; }
 .conclusion-card .claim-number { font-weight: 700; color: var(--accent); }
 .compared { display: block; margin-top: 0.6rem; font-size: 0.9rem; }
+
+/* Evaluate steps */
+.junction { flex-direction: column; align-items: center; }
+.eval-badge {
+  margin-top: 3px; padding: 0 0.45rem; border-radius: 999px; font-size: 0.68rem; font-weight: 600;
+  background: var(--panel); border: 1px solid var(--border); color: var(--text); white-space: nowrap;
+}
+.eval-badge.todo { color: var(--muted); font-style: italic; font-weight: 500; }
+.junction .link-menu[role='dialog'] { min-width: 260px; padding: 0.5rem; gap: 0.4rem; }
+.eval-group { border: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 0.3rem; }
+.eval-group legend { font-size: 0.78rem; color: var(--muted); margin-bottom: 0.25rem; padding: 0; text-transform: none; letter-spacing: 0; font-weight: 500; }
+.junction .eval-group button, .outline-eval .eval-group button {
+  min-width: 0; flex: 1; border: 1px solid var(--border); border-radius: 6px; background: var(--panel); color: var(--text);
+  text-transform: capitalize; letter-spacing: 0; font-weight: 500; font-size: 0.8rem; padding: 0.3rem 0.5rem;
+}
+.junction .eval-group button.on, .outline-eval .eval-group button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.outline-eval { flex: 1 1 100%; display: grid; gap: 0.4rem; padding: 0.4rem 0; }

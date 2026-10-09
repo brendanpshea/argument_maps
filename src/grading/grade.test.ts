@@ -5,8 +5,8 @@ import { compileLesson } from '../lesson/compile';
 import { parsePassage } from '../lesson/passage';
 import { mapFromAnswer } from '../model/layout';
 import { asAnswer, expandVariants } from '../lesson/variants';
-import { isBank, type ArgumentMap, type Claim, type Lesson, type MapNode, type Span } from '../model/types';
-import { gradeStep } from './grade';
+import { isBank, type ArgumentMap, type Claim, type Evaluation, type Lesson, type MapNode, type Span } from '../model/types';
+import { gradeStep, withKeyEvaluations } from './grade';
 
 const lessonsDir = join(__dirname, '../../lessons');
 const lessonFiles = readdirSync(lessonsDir).filter((f) => /\.ya?ml$/.test(f));
@@ -18,7 +18,8 @@ describe('lesson files', () => {
     lesson.steps.forEach((step, i) => {
       for (const answer of step.answers) {
         for (const variant of expandVariants(answer)) {
-          const result = gradeStep(lesson, i, mapFromAnswer(lesson, asAnswer(variant)));
+          const model = mapFromAnswer(lesson, asAnswer(variant));
+          const result = gradeStep(lesson, i, step.task === 'evaluate' ? withKeyEvaluations(lesson, step, model) : model);
           expect(result.earned, `step ${i + 1}: ${JSON.stringify(variant)}`).toBe(result.possible);
         }
       }
@@ -31,6 +32,8 @@ describe('lesson files', () => {
   it.each(lessonFiles)('%s never strands a student between steps', (file) => {
     const lesson = load(file);
     for (let i = 0; i + 1 < lesson.steps.length; i++) {
+      // Only structure steps can reject a carried-forward map; the other tasks grade something else.
+      if (lesson.steps[i + 1].task !== 'structure') continue;
       const isNew = (id: string) => {
         const c = lesson.claims[id];
         return isBank(c.source) ? c.bankStep === i + 1 : c.source.segment === i + 1;
@@ -429,5 +432,85 @@ ${steps}
     ).toThrow(/takes its answer from a structure step/);
     expect(() => compileLesson(lesson(`${structure}\n  - task: reword\n    instructions: r`, 'rewording: none'))).toThrow(/reword step needs/);
     expect(() => compileLesson(lesson(`  - task: conclusion\n    instructions: c\n${structure}`))).toThrow(/only appears in step 2/);
+  });
+});
+
+describe('evaluate steps', () => {
+  const butler = load('butler.yaml');
+  const step = 2;
+  const model = mapFromAnswer(butler, butler.steps[1].answers[0]);
+  // Relations in the model map are r-0..r-3 in answer order: [p1,p2] valid, [p3] strong, [p4,p5] invalid, [p6] weak.
+  const withEvals = (evals: Record<string, Evaluation>): ArgumentMap => ({
+    ...model,
+    relations: model.relations.map((r) => (evals[r.id] ? { ...r, evaluation: evals[r.id] } : r)),
+  });
+  const all: Record<string, Evaluation> = {
+    'r-0': { type: 'deductive', quality: 'valid' },
+    'r-1': { type: 'inductive', quality: 'strong' },
+    'r-2': { type: 'deductive', quality: 'invalid' },
+    'r-3': { type: 'inductive', quality: 'weak' },
+  };
+  const grade = (m: ArgumentMap) => gradeStep(butler, step, m);
+
+  it('full marks for correct type and quality on every link', () => {
+    const r = grade(withEvals(all));
+    expect([r.earned, r.possible]).toEqual([8, 8]);
+  });
+
+  it('asks for missing evaluations', () => {
+    const r = grade(model);
+    expect(r.earned).toBe(0);
+    expect(r.items.filter((i) => i.status === 'missing')).toHaveLength(4);
+  });
+
+  it('a wrong type gets the type hint and no quality credit', () => {
+    const r = grade(withEvals({ ...all, 'r-1': { type: 'deductive', quality: 'valid' } }));
+    expect([r.earned, r.possible]).toEqual([6, 8]);
+    expect(r.items.find((i) => i.status === 'wrong')?.message).toMatch(/guarantee the conclusion, or only that they make it likely/);
+  });
+
+  it('a wrong quality gets the author hint when there is one, otherwise the automatic one', () => {
+    const custom = grade(withEvals({ ...all, 'r-2': { type: 'deductive', quality: 'valid' } }));
+    expect(custom.items.find((i) => i.status === 'wrong')?.message).toMatch(/What else might make someone nervous/);
+    const auto = grade(withEvals({ ...all, 'r-3': { type: 'inductive', quality: 'strong' } }));
+    expect(auto.items.find((i) => i.status === 'wrong')?.message).toMatch(/how likely would the conclusion be/);
+  });
+
+  const yaml = (evaluations: string, extra = '') => `
+id: ev
+title: Ev
+steps:
+  - instructions: s
+    passage: "{{a|A}} and {{b|B}}, so {{c|C}}. But {{o|O}}."
+    answer:
+      conclusion: c
+      relations:
+        - { type: support, from: [a], to: c }
+        - { type: support, from: [b], to: c, grouping: either }
+        - { type: objection, from: [o], to: c }
+  - task: evaluate
+    instructions: e
+${extra}
+    evaluations:
+${evaluations}
+`;
+
+  it('accepts a list of qualities, and ask: type grades only the type', () => {
+    const lesson = compileLesson(yaml(`      - { link: { from: [a], to: c }, type: inductive, quality: [strong, weak] }`));
+    const m = mapFromAnswer(lesson, lesson.steps[0].answers[0]);
+    const set = (e: Evaluation) => ({ ...m, relations: m.relations.map((r) => (r.from[0] === 'n-a' ? { ...r, evaluation: e } : r)) });
+    const strong = gradeStep(lesson, 1, set({ type: 'inductive', quality: 'strong' }));
+    const weak = gradeStep(lesson, 1, set({ type: 'inductive', quality: 'weak' }));
+    expect([strong.earned / strong.possible, weak.earned / weak.possible]).toEqual([1, 1]);
+    const typeOnly = compileLesson(yaml(`      - { link: { from: [a], to: c }, type: inductive, quality: strong }`, '    ask: type'));
+    const r = gradeStep(typeOnly, 1, set({ type: 'inductive' }));
+    expect([r.earned, r.possible]).toEqual([1, 1]);
+  });
+
+  it('rejects evaluations that cannot be graded', () => {
+    expect(() => compileLesson(yaml(`      - { link: { from: [a], to: c }, type: inductive, quality: valid }`))).toThrow(/inductive link is strong or weak/);
+    expect(() => compileLesson(yaml(`      - { link: { from: [b], to: a }, type: inductive }`))).toThrow(/not a link in the answer/);
+    expect(() => compileLesson(yaml(`      - { link: { from: [o], to: c }, type: inductive }`))).toThrow(/only support links are evaluated/);
+    expect(() => compileLesson(yaml(`      - { link: { from: [b], to: c }, type: inductive }`))).toThrow(/needs a fixed grouping|evaluated links need a fixed grouping/);
   });
 });

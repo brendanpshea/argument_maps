@@ -1,7 +1,7 @@
 import { parse as parseYaml } from 'yaml';
 import { lessonFileSchema, type AnswerFile, type RelationTypeFile } from './schema';
 import { parsePassage } from './passage';
-import { isBank, type Answer, type Claim, type Lesson, type RelationType, type Step } from '../model/types';
+import { isBank, QUALITIES, type Answer, type Claim, type Lesson, type RelationType, type Step } from '../model/types';
 
 const relationType = (t: RelationTypeFile): RelationType => (t === 'support' ? 'support' : 'objection');
 
@@ -76,6 +76,17 @@ export function compileLesson(yamlSource: string, fileName = 'lesson'): Lesson {
       fail(`step ${segment + 1} is a ${stepFile.task} step, which takes its answer from a structure step; remove answer/alternatives/mistakes`);
     }
     if (stepFile.conclusionHints && stepFile.task !== 'conclusion') fail(`step ${segment + 1}: conclusionHints only apply to conclusion steps`);
+    const evaluate = stepFile.task === 'evaluate';
+    if (!evaluate && (stepFile.evaluations || stepFile.ask)) fail(`step ${segment + 1}: evaluations and ask only apply to evaluate steps`);
+    if (evaluate && !stepFile.evaluations?.length) fail(`step ${segment + 1} is an evaluate step but lists no evaluations`);
+    const evaluations = (stepFile.evaluations ?? []).map((e, k) => {
+      const quality = e.quality === undefined ? [] : Array.isArray(e.quality) ? e.quality : [e.quality];
+      const allowed = QUALITIES[e.type];
+      for (const q of quality) {
+        if (!allowed.includes(q)) fail(`step ${segment + 1} evaluation ${k + 1}: a ${e.type} link is ${allowed.join(' or ')}, not ${q}`);
+      }
+      return { from: e.link.from, to: e.link.to, type: e.type, quality, hint: e.hint };
+    });
     for (const id of Object.keys(stepFile.conclusionHints ?? {})) {
       if (!claims[id]) fail(`step ${segment + 1} conclusionHints has "${id}", which is not a claim in this or an earlier step`);
     }
@@ -88,6 +99,8 @@ export function compileLesson(yamlSource: string, fileName = 'lesson'): Lesson {
         ? [toAnswer(stepFile.answer!, 'answer'), ...(stepFile.alternatives ?? []).map((a, i) => toAnswer(a, `alternative ${i + 1}`))]
         : [],
       conclusionHints: stepFile.conclusionHints ?? {},
+      ask: stepFile.ask ?? 'full',
+      evaluations,
       mistakes: (stepFile.mistakes ?? []).map((m) => ({
         message: m.message,
         relation: { type: relationType(m.relation.type), from: m.relation.from, to: m.relation.to },
@@ -95,7 +108,7 @@ export function compileLesson(yamlSource: string, fileName = 'lesson'): Lesson {
     });
   });
 
-  // Conclusion steps grade against the next structure step; reword steps against the previous one.
+  // Conclusion steps grade against the next structure step; reword and evaluate steps against the previous one.
   steps.forEach((step, i) => {
     if (step.task === 'structure') return;
     const source =
@@ -113,6 +126,19 @@ export function compileLesson(yamlSource: string, fileName = 'lesson'): Lesson {
       const c = claims[a.conclusion];
       const introduced = isBank(c.source) ? c.bankStep! : c.source.segment;
       if (introduced > i) fail(`step ${i + 1} asks for the main conclusion, but "${a.conclusion}" only appears in step ${introduced + 1}`);
+    }
+  });
+  // Each evaluated link must be a fixed-grouping support link in the answer being evaluated.
+  steps.forEach((step, i) => {
+    for (const e of step.evaluations) {
+      const label = `step ${i + 1}: evaluated link ${e.from.join(' + ')} → ${e.to}`;
+      [...e.from, e.to].forEach((id) => claims[id] || fail(`${label} refers to "${id}", which is not a claim in this lesson`));
+      for (const a of step.answers) {
+        const rel = a.relations.find((r) => r.to.includes(e.to) && r.from.length === e.from.length && r.from.every((f) => e.from.includes(f)));
+        if (!rel) fail(`${label} is not a link in the answer being evaluated`);
+        if (rel!.type !== 'support') fail(`${label} is an objection; only support links are evaluated`);
+        if (rel!.grouping === 'either') fail(`${label} has \`grouping: either\`; evaluated links need a fixed grouping`);
+      }
     }
   });
   if (file.rewording === 'none' && steps.some((s) => s.task === 'reword')) {

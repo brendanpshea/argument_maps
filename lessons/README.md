@@ -144,6 +144,50 @@ When a lesson has a reword step, the structure steps keep the passage wording
 correct map. A step's `passage` is optional: a step that adds no new text
 just shows the passage so far.
 
+## Evaluating the reasoning
+
+An `evaluate` step comes after a structure step. The map is locked, and for
+each support link you list, students answer two questions from the link's
+label (or the outline view):
+
+1. **Type:** does the arguer present the premises as guaranteeing the
+   conclusion (*deductive*) or as making it likely (*inductive*)?
+2. **Quality:** *valid* or *invalid* if deductive; *strong* or *weak* if
+   inductive.
+
+```yaml
+  - task: evaluate
+    title: Evaluate the reasoning
+    instructions: ...
+    ask: full                  # or `type` to ask only deductive/inductive
+    evaluations:
+      - link: { from: [p1, p2], to: c }    # linked premises are evaluated together
+        type: deductive
+        quality: valid
+      - link: { from: [p3], to: c }
+        type: inductive
+        quality: [strong, weak]            # borderline: accept either
+      - link: { from: [p4, p5], to: c }
+        type: deductive
+        quality: invalid
+        hint: Suppose both premises are true. Could the butler still be innocent?
+```
+
+- Each `link` must be a support link in the structure step's answer (by its
+  exact premises and target). Objections aren't evaluated, and evaluated
+  links can't use `grouping: either`, since validity depends on how premises
+  are grouped.
+- Leave out `quality` to grade only the type for that link.
+- A wrong answer gets an automatic hint (about guarantee vs. likelihood for
+  the type; "imagine the premises true, could the conclusion be false?" for
+  validity; "how likely, and what else could explain it?" for strength) unless
+  you give a `hint`.
+- Each link scores a point for the type and a point for the quality. A wrong
+  type earns neither.
+- Links you don't list aren't asked about.
+
+See `butler.yaml` for an example with one link of each kind.
+
 ## Multi-step lessons
 
 Each step adds text to the passage, and its `answer` is the **whole** map

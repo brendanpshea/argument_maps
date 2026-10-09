@@ -27,7 +27,7 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { toPng } from 'html-to-image';
-import type { ArgumentMap, MapRelation, RelationType } from '../model/types';
+import { QUALITIES, type ArgumentMap, type Evaluation, type InferenceQuality, type InferenceType, type MapRelation, type RelationType } from '../model/types';
 import { autoLayout, CLAIM_SIZE, JUNCTION_SIZE } from '../model/layout';
 import * as ops from '../model/ops';
 import { download } from './exportMap';
@@ -55,6 +55,10 @@ type JunctionData = {
   /** Claims that could be added to this link as linked premises. */
   candidates: { id: string; name: string }[];
   readOnly: boolean;
+  /** The student's judgement of this link, shown as a badge. */
+  evaluation?: Evaluation;
+  /** Set in evaluate steps when this link is to be evaluated: what to ask. */
+  evaluate?: 'type' | 'full';
 };
 type LinkEdgeT = Edge<{ readOnly: boolean; title: string }, 'link'>;
 type ClaimNodeT = Node<ClaimData, 'claim'>;
@@ -70,6 +74,7 @@ interface Actions {
   linkPremise(relationId: string, nodeId: string): void;
   split(relationId: string): void;
   removeEdge(edgeId: string): void;
+  setEvaluation(relationId: string, evaluation: Evaluation): void;
 }
 const ActionsContext = createContext<Actions | null>(null);
 
@@ -191,20 +196,37 @@ function JunctionNode({ id, data, selected }: NodeProps<JunctionNodeT>) {
     setOpen(false);
     fn();
   };
+  const ev = data.evaluation;
   return (
     <div className={`junction junction-${data.type}`}>
       <SideHandles />
       <button
         className="nodrag"
-        disabled={data.readOnly}
-        aria-haspopup="menu"
+        disabled={data.readOnly && !data.evaluate}
+        aria-haspopup={data.evaluate ? 'dialog' : 'menu'}
         aria-expanded={open}
-        title={data.readOnly ? undefined : 'Change or delete this link'}
+        title={data.evaluate ? 'Evaluate this reasoning' : data.readOnly ? undefined : 'Change or delete this link'}
         onClick={() => setOpen(!open)}
       >
         {data.label}
       </button>
-      {open && picking && (
+      {ev?.type ? (
+        <span className="eval-badge">{[ev.type, ev.quality].filter(Boolean).join(' · ')}</span>
+      ) : (
+        data.evaluate && <span className="eval-badge todo">evaluate?</span>
+      )}
+      {open && data.evaluate && (
+        <EvaluationPicker
+          className="link-menu nodrag"
+          ask={data.evaluate}
+          value={ev ?? {}}
+          onChange={(next) => {
+            actions.setEvaluation(id, next);
+            if (next.type && (data.evaluate === 'type' || next.quality)) setOpen(false);
+          }}
+        />
+      )}
+      {open && !data.evaluate && picking && (
         <div className="link-menu nodrag" role="menu" aria-label="Link with another premise">
           <p className="link-menu-title">Which premise works together with {data.premises > 1 ? 'these' : 'this one'}?</p>
           {data.candidates.map((c) => (
@@ -217,7 +239,7 @@ function JunctionNode({ id, data, selected }: NodeProps<JunctionNodeT>) {
           </button>
         </div>
       )}
-      {open && !picking && (
+      {open && !data.evaluate && !picking && (
         <div className="link-menu nodrag" role="menu">
           {data.candidates.length > 0 && (
             <button role="menuitem" onClick={() => setPicking(true)}>
@@ -242,6 +264,46 @@ function JunctionNode({ id, data, selected }: NodeProps<JunctionNodeT>) {
           </button>
         </div>
       )}
+    </div>
+  );
+}
+
+/** Two questions about one inference: deductive or inductive, then valid/invalid or strong/weak. */
+export function EvaluationPicker({
+  ask,
+  value,
+  onChange,
+  className,
+}: {
+  ask: 'type' | 'full';
+  value: Evaluation;
+  onChange: (next: Evaluation) => void;
+  className?: string;
+}) {
+  const group = (legend: string, options: string[], current: string | undefined, pick: (o: string) => void) => (
+    <fieldset className="eval-group">
+      <legend>{legend}</legend>
+      {options.map((o) => (
+        <button key={o} role="radio" aria-checked={current === o} className={current === o ? 'on' : ''} onClick={() => pick(o)}>
+          {o}
+        </button>
+      ))}
+    </fieldset>
+  );
+  return (
+    <div className={className} role="dialog" aria-label="Evaluate this reasoning">
+      {group('Do the premises claim to guarantee the conclusion, or make it likely?', ['deductive', 'inductive'], value.type, (t) =>
+        // Changing the type resets the quality, whose options depend on it.
+        onChange({ type: t as InferenceType, quality: t === value.type ? value.quality : undefined }),
+      )}
+      {ask === 'full' &&
+        value.type &&
+        group(
+          value.type === 'deductive' ? 'If the premises were true, would the conclusion have to be true?' : 'If the premises were true, how likely would the conclusion be?',
+          QUALITIES[value.type],
+          value.quality,
+          (q) => onChange({ ...value, quality: q as InferenceQuality }),
+        )}
     </div>
   );
 }
@@ -287,6 +349,8 @@ export interface MapEditorProps {
   originalTextFor: (nodeId: string) => string;
   editFor: (nodeId: string) => WordingEdit;
   tagFor?: (nodeId: string) => string | undefined;
+  /** Evaluate steps: what to ask about this link, or null if it isn't evaluated. */
+  evaluateFor?: (relationId: string) => 'type' | 'full' | null;
   exportName?: string;
 }
 
@@ -327,6 +391,8 @@ function buildNodes(map: ArgumentMap, props: MapEditorProps, prev: Node[]): Node
           type: r.type,
           label: ops.relationLabel(map, r.id),
           premises: r.from.length,
+          evaluation: r.evaluation,
+          evaluate: props.evaluateFor?.(r.id) ?? undefined,
           candidates: map.nodes
             .filter((n) => n.id !== r.to && !r.from.includes(n.id))
             .map((n) => ({ id: n.id, name: [props.labelFor?.(n.id), truncate(n.text)].filter(Boolean).join(' ') })),
@@ -494,6 +560,7 @@ function Editor(props: MapEditorProps) {
     removeRelation: (id) => commit(ops.removeRelation(mapRef.current, id)),
     linkPremise: (id, nodeId) => commit(ops.linkPremise(mapRef.current, id, nodeId)),
     split: (id) => commit(ops.splitRelation(mapRef.current, id)),
+    setEvaluation: (id, evaluation) => commit(ops.setEvaluation(mapRef.current, id, evaluation)),
     removeEdge: (id) => commit(removeEdgeFromMap(mapRef.current, id)),
   };
 

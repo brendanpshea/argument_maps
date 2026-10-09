@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { stringify as toYaml } from 'yaml';
-import { gradeStep, hasRewordStep, matchNodes, type GradeResult } from '../grading/grade';
+import { evaluationKeys, gradeStep, hasRewordStep, matchNodes, withKeyEvaluations, type GradeResult } from '../grading/grade';
 import { mapFromAnswer } from '../model/layout';
 import * as ops from '../model/ops';
 import { stableShuffle } from '../model/shuffle';
@@ -62,7 +62,11 @@ export function LessonPlayer({ lesson, store, authorMode, onExit }: Props) {
   useEffect(() => store.save(lesson.id, progress), [store, lesson.id, progress]);
 
   const { mapping } = useMemo(() => matchNodes(lesson, map), [lesson, map]);
-  const modelMap = useMemo(() => mapFromAnswer(lesson, step.answers[0]), [lesson, step]);
+  const modelMap = useMemo(() => {
+    const model = mapFromAnswer(lesson, step.answers[0]);
+    return step.task === 'evaluate' ? withKeyEvaluations(lesson, step, model) : model;
+  }, [lesson, step]);
+  const evaluated = useMemo(() => (step.task === 'evaluate' ? evaluationKeys(lesson, step, map) : new Map()), [lesson, step, map]);
 
   /** The claim as written: its passage text, or its claim-bank text. */
   const originalTextOf = (source: ClaimSource) =>
@@ -72,8 +76,8 @@ export function LessonPlayer({ lesson, store, authorMode, onExit }: Props) {
   const editFor = (m: ArgumentMap, nodeId: string): WordingEdit => {
     const node = nodeById(m, nodeId);
     if (!node || lesson.rewording === 'none' || isBank(node.source)) return { kind: 'none' };
-    // With a reword step, wording waits until the structure is done.
-    if (hasRewordStep(lesson) && task !== 'reword' && m !== modelMap) return { kind: 'none' };
+    // With a reword step, wording waits until the structure is done; evaluate steps don't change wording.
+    if (m !== modelMap && (task === 'evaluate' || (hasRewordStep(lesson) && task !== 'reword'))) return { kind: 'none' };
     if (lesson.rewording === 'free') return { kind: 'free' };
     const claimId = m === modelMap ? nodeId.slice(2) : mapping[nodeId];
     const choices = claimId ? lesson.claims[claimId]?.wordingChoices : undefined;
@@ -205,7 +209,7 @@ export function LessonPlayer({ lesson, store, authorMode, onExit }: Props) {
             lesson={lesson}
             stepIndex={stepIndex}
             usedSpans={map.nodes.flatMap((n) => (isBank(n.source) ? [] : [n.source]))}
-            readOnly={showModel || task === 'reword'}
+            readOnly={showModel || task === 'reword' || task === 'evaluate'}
             addLabel={task === 'conclusion' ? 'This is the main conclusion' : undefined}
             onAddClaim={(span: Span, text: string) => (task === 'conclusion' ? pickConclusion(span, text) : setMap(ops.addNode(map, text, span)))}
           />
@@ -221,7 +225,7 @@ export function LessonPlayer({ lesson, store, authorMode, onExit }: Props) {
 
           <div className="actions">
             <button className="primary" onClick={check} disabled={task === 'conclusion' ? !map.conclusion : !map.nodes.length}>
-              {task === 'conclusion' ? 'Check' : task === 'reword' ? 'Check wording' : 'Check my map'}
+              {task === 'conclusion' ? 'Check' : task === 'reword' ? 'Check wording' : task === 'evaluate' ? 'Check evaluations' : 'Check my map'}
             </button>
             {authorMode && (
               <button onClick={() => setShowModel((v) => !v)} aria-pressed={showModel}>
@@ -242,6 +246,7 @@ export function LessonPlayer({ lesson, store, authorMode, onExit }: Props) {
               result={result}
               rewordStep={task === 'reword'}
               conclusionStep={task === 'conclusion'}
+              evaluateStep={task === 'evaluate'}
               compared={compared}
               onCompared={() => {
                 setCompared(true);
@@ -255,7 +260,14 @@ export function LessonPlayer({ lesson, store, authorMode, onExit }: Props) {
           {task !== 'conclusion' && (
             <details className="outline-wrap">
               <summary>Outline view (edit with the keyboard)</summary>
-              <Outline map={map} onChange={setMap} nameFor={nameFor} editFor={(id) => editFor(map, id)} locked={task === 'reword'} />
+              <Outline
+                map={map}
+                onChange={setMap}
+                nameFor={nameFor}
+                editFor={(id) => editFor(map, id)}
+                locked={task === 'reword' || task === 'evaluate'}
+                evaluateFor={(id) => (evaluated.has(id) ? step.ask : null)}
+              />
             </details>
           )}
 
@@ -299,7 +311,8 @@ export function LessonPlayer({ lesson, store, authorMode, onExit }: Props) {
             map={showModel ? modelMap : map}
             onChange={setMap}
             readOnly={showModel}
-            locked={task === 'reword'}
+            locked={task === 'reword' || task === 'evaluate'}
+            evaluateFor={(id) => (!showModel && evaluated.has(id) ? step.ask : null)}
             labelFor={(id) => numberFor(showModel ? modelMap : map, id)}
             originalTextFor={(id) => {
               const n = nodeById(showModel ? modelMap : map, id);
