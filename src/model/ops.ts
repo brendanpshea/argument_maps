@@ -10,7 +10,7 @@ export function addNode(map: ArgumentMap, text: string, source: ClaimSource, pos
     id: newId('n'),
     text,
     source,
-    position: position ?? { x: 20 + (i % 3) * 270, y: 20 + Math.floor(i / 3) * 150 },
+    position: position ?? { x: 20 + (i % 3) * 360, y: 20 + Math.floor(i / 3) * 200 },
   };
   return { ...map, nodes: [...map.nodes, node] };
 }

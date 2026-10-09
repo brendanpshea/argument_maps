@@ -209,3 +209,9 @@ details > summary { cursor: pointer; color: var(--accent); }
   position: absolute; pointer-events: all; width: 24px; height: 24px; padding: 0; border-radius: 50%;
   background: var(--panel); border: 2px solid var(--objection); color: var(--objection); font-weight: 700; line-height: 1;
 }
+
+/* Side dots appear on hover so the default view stays uncluttered. */
+.react-flow__handle-left, .react-flow__handle-right { opacity: 0; transition: opacity 0.15s; }
+.react-flow__node:hover .react-flow__handle-left, .react-flow__node:hover .react-flow__handle-right,
+.react-flow__handle-left.connectingto, .react-flow__handle-right.connectingto { opacity: 1; }
+.junction .react-flow__handle { width: 8px; height: 8px; }
