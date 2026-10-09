@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState } f
 import {
   Background,
   BaseEdge,
+  ConnectionMode,
   Controls,
   EdgeLabelRenderer,
   Handle,
@@ -26,8 +27,8 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { toPng } from 'html-to-image';
-import type { ArgumentMap, RelationType } from '../model/types';
-import { autoLayout } from '../model/layout';
+import type { ArgumentMap, MapRelation, RelationType } from '../model/types';
+import { autoLayout, CLAIM_SIZE, JUNCTION_SIZE } from '../model/layout';
 import * as ops from '../model/ops';
 import { download } from './exportMap';
 
@@ -75,7 +76,7 @@ function ClaimNode({ id, data, selected }: NodeProps<ClaimNodeT>) {
 
   return (
     <div className={`claim-node${data.isConclusion ? ' is-conclusion' : ''}${selected ? ' is-selected' : ''}`}>
-      <Handle type="source" position={Position.Top} />
+      <SideHandles />
       <div className="claim-head">
         {data.label && <span className="claim-number">{data.label}</span>}
         {data.isConclusion && <span className="conclusion-tag">Main conclusion</span>}
@@ -145,8 +146,19 @@ function ClaimNode({ id, data, selected }: NodeProps<ClaimNodeT>) {
           {data.text}
         </div>
       )}
-      <Handle type="target" position={Position.Bottom} />
     </div>
+  );
+}
+
+/** Connection dots on all four sides. Any dot can start or end a link (ConnectionMode.Loose). */
+function SideHandles() {
+  return (
+    <>
+      <Handle type="source" position={Position.Top} id="top" />
+      <Handle type="source" position={Position.Bottom} id="bottom" />
+      <Handle type="source" position={Position.Left} id="left" />
+      <Handle type="source" position={Position.Right} id="right" />
+    </>
   );
 }
 
@@ -162,7 +174,7 @@ function JunctionNode({ id, data, selected }: NodeProps<JunctionNodeT>) {
   };
   return (
     <div className={`junction junction-${data.type}`}>
-      <Handle type="target" position={Position.Bottom} />
+      <SideHandles />
       <button
         className="nodrag"
         disabled={data.readOnly}
@@ -188,7 +200,6 @@ function JunctionNode({ id, data, selected }: NodeProps<JunctionNodeT>) {
           </button>
         </div>
       )}
-      <Handle type="source" position={Position.Top} />
     </div>
   );
 }
@@ -258,13 +269,11 @@ function buildNodes(map: ArgumentMap, props: MapEditorProps, prev: Node[]): Node
         },
       }),
     ),
-    ...map.relations.map((r, i): JunctionNodeT => {
-      const target = map.nodes.find((n) => n.id === r.to);
-      const fallback = target ? { x: target.position.x + 70, y: target.position.y + 130 + i * 4 } : { x: 0, y: 0 };
+    ...map.relations.map((r): JunctionNodeT => {
       return {
         id: r.id,
         type: 'junction',
-        position: r.position ?? fallback,
+        position: junctionPosition(map, r),
         ...keep(r.id),
         data: { type: r.type, label: ops.relationLabel(map, r.id), premises: r.from.length, readOnly },
       };
@@ -272,8 +281,36 @@ function buildNodes(map: ArgumentMap, props: MapEditorProps, prev: Node[]): Node
   ];
 }
 
+/** Where a link's label sits: its saved position, or midway between its premises and its target. */
+function junctionPosition(map: ArgumentMap, r: MapRelation): { x: number; y: number } {
+  if (r.position) return r.position;
+  const ends = [...r.from, r.to].flatMap((id) => map.nodes.filter((n) => n.id === id));
+  if (!ends.length) return { x: 0, y: 0 };
+  const cx = ends.reduce((sum, n) => sum + n.position.x, 0) / ends.length + CLAIM_SIZE.width / 2;
+  const cy = ends.reduce((sum, n) => sum + n.position.y, 0) / ends.length + CLAIM_SIZE.height / 2;
+  return { x: cx - JUNCTION_SIZE.width / 2, y: cy - JUNCTION_SIZE.height / 2 };
+}
+
 function buildEdges(map: ArgumentMap, prev: Edge[], readOnly: boolean): LinkEdgeT[] {
   const selected = new Set(prev.filter((e) => e.selected).map((e) => e.id));
+  // Attach each line to the sides of the two boxes that face each other.
+  const center = (id: string) => {
+    const n = map.nodes.find((x) => x.id === id);
+    if (n) return { x: n.position.x + CLAIM_SIZE.width / 2, y: n.position.y + CLAIM_SIZE.height / 2 };
+    const r = map.relations.find((x) => x.id === id);
+    const p = r ? junctionPosition(map, r) : { x: 0, y: 0 };
+    return { x: p.x + JUNCTION_SIZE.width / 2, y: p.y + JUNCTION_SIZE.height / 2 };
+  };
+  const handles = (source: string, target: string) => {
+    const a = center(source);
+    const b = center(target);
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    if (Math.abs(dx) > Math.abs(dy) * 1.5) {
+      return dx > 0 ? { sourceHandle: 'right', targetHandle: 'left' } : { sourceHandle: 'left', targetHandle: 'right' };
+    }
+    return dy >= 0 ? { sourceHandle: 'bottom', targetHandle: 'top' } : { sourceHandle: 'top', targetHandle: 'bottom' };
+  };
   return map.relations.flatMap((r): LinkEdgeT[] => {
     const stroke = COLORS[r.type];
     const linked = r.from.length > 1;
@@ -283,6 +320,7 @@ function buildEdges(map: ArgumentMap, prev: Edge[], readOnly: boolean): LinkEdge
         type: 'link',
         source: f,
         target: r.id,
+        ...handles(f, r.id),
         style: { stroke },
         selected: selected.has(`p|${r.id}|${f}`),
         data: { readOnly, title: linked ? 'Remove this premise from the link' : 'Delete this link' },
@@ -292,6 +330,7 @@ function buildEdges(map: ArgumentMap, prev: Edge[], readOnly: boolean): LinkEdge
         type: 'link',
         source: r.id,
         target: r.to,
+        ...handles(r.id, r.to),
         style: { stroke },
         markerEnd: { type: MarkerType.ArrowClosed, color: stroke },
         selected: selected.has(`o|${r.id}`),
@@ -358,12 +397,19 @@ function Editor(props: MapEditorProps) {
 
   const onEdgesChange = (changes: EdgeChange[]) => setEdges((eds) => applyEdgeChanges(changes, eds));
 
+  // The claim a student starts dragging from is the premise and the one they drop on is
+  // its target, whichever dot they use. (React Flow orders a connection by handle type,
+  // which would reverse links dragged from a bottom dot.)
+  const dragStart = useRef<string | null>(null);
   const onConnect = (c: Connection) => {
     const current = mapRef.current;
-    if (current.relations.some((r) => r.id === c.target)) {
-      commit(ops.addPremise(current, c.target, c.source));
-    } else if (current.nodes.some((n) => n.id === c.source)) {
-      commit(ops.addRelation(current, linkType, [c.source], c.target));
+    const premise = dragStart.current ?? c.source;
+    const other = c.source === premise ? c.target : c.source;
+    if (!current.nodes.some((n) => n.id === premise)) return;
+    if (current.relations.some((r) => r.id === other)) {
+      commit(ops.addPremise(current, other, premise));
+    } else {
+      commit(ops.addRelation(current, linkType, [premise], other));
     }
   };
 
@@ -408,6 +454,9 @@ function Editor(props: MapEditorProps) {
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={readOnly ? undefined : onConnect}
+          onConnectStart={(_, { nodeId }) => (dragStart.current = nodeId)}
+          onConnectEnd={() => setTimeout(() => (dragStart.current = null))}
+          connectionMode={ConnectionMode.Loose}
           onDelete={readOnly ? undefined : onDelete}
           nodesDraggable={!readOnly}
           nodesConnectable={!readOnly}

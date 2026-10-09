@@ -15,8 +15,9 @@ the browser, with no server.
    passage wording. Students never create claims by typing: every claim comes
    from the passage or the **claim bank**, which holds unstated premises plus
    decoys. That is what keeps the maps autogradable.
-3. **Mark the main conclusion** (★) and **draw links**: drag from the dot on
-   top of a premise to the dot under the claim it supports or objects to.
+3. **Mark the main conclusion** (★) and **draw links**: drag from any dot on
+   a premise to the claim it supports or objects to. The claim you start
+   from is always the premise, whichever dot you use.
    Drag another premise onto an existing link's label to make a linked
    argument. An objection to an objection is shown as *rebuts*. Click a
    link's label for a menu to switch it between *supports* and *objects to*,
