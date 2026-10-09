@@ -59,19 +59,27 @@ function candidateClaim(lesson: Lesson, source: ClaimSource): { claimId: string;
   return top;
 }
 
-/** Matches each student node to the lesson claim it came from (passage text or claim bank). */
+/** The representative of a claim's `equivalent` set (or the claim itself). */
+export const canonical = (lesson: Lesson, claimId: string) => lesson.equivalent[claimId] ?? claimId;
+
+/**
+ * Matches each student node to the lesson claim it came from (passage text or claim bank).
+ * At most one node is matched per claim, counting equivalent claims as the same claim;
+ * any others are reported as duplicates.
+ */
 export function matchNodes(lesson: Lesson, map: ArgumentMap): { mapping: Record<string, string>; duplicates: string[] } {
-  const best: Record<string, { nodeId: string; score: number }> = {};
+  const best: Record<string, { nodeId: string; claimId: string; score: number }> = {};
   const matched = new Set<string>();
   for (const node of map.nodes) {
     const top = candidateClaim(lesson, node.source);
     if (!top) continue;
     matched.add(node.id);
-    const prev = best[top.claimId];
-    if (!prev || top.score > prev.score) best[top.claimId] = { nodeId: node.id, score: top.score };
+    const key = canonical(lesson, top.claimId);
+    const prev = best[key];
+    if (!prev || top.score > prev.score) best[key] = { nodeId: node.id, claimId: top.claimId, score: top.score };
   }
   const mapping: Record<string, string> = {};
-  for (const [claimId, { nodeId }] of Object.entries(best)) mapping[nodeId] = claimId;
+  for (const { nodeId, claimId } of Object.values(best)) mapping[nodeId] = claimId;
   const duplicates = map.nodes.filter((n) => matched.has(n.id) && !mapping[n.id]).map((n) => n.id);
   return { mapping, duplicates };
 }
@@ -86,11 +94,20 @@ function joinNames(names: string[]) {
   return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
 }
 
-function gradeAgainst(lesson: Lesson, step: Step, map: ArgumentMap, answer: Answer): GradeResult {
+const uniq = <T,>(xs: T[]) => [...new Set(xs)];
+
+function gradeAgainst(lesson: Lesson, step: Step, map: ArgumentMap, rawAnswer: Answer): GradeResult {
   const { mapping, duplicates } = matchNodes(lesson, map);
-  const nodeFor = (claimId: string) => map.nodes.find((n) => mapping[n.id] === claimId);
+  // Everything below works with canonical claim ids, so equivalent claims are interchangeable.
+  const canon = (id: string) => canonical(lesson, id);
+  const answer = {
+    conclusion: canon(rawAnswer.conclusion),
+    relations: rawAnswer.relations.map((r) => ({ ...r, from: uniq(r.from.map(canon)), to: uniq(r.to.map(canon)) })),
+  };
+  const nodeFor = (claimId: string) => map.nodes.find((n) => mapping[n.id] && canon(mapping[n.id]) === claimId);
   const name = (claimId: string) => {
-    const claim = lesson.claims[claimId];
+    const node = nodeFor(claimId);
+    const claim = lesson.claims[node ? mapping[node.id] : claimId];
     if (lesson.claimMode === 'marked' && !isBank(claim.source)) return `(${claim.number})`;
     return `“${truncate(nodeFor(claimId)?.text ?? claim.modelText)}”`;
   };
@@ -104,7 +121,7 @@ function gradeAgainst(lesson: Lesson, step: Step, map: ArgumentMap, answer: Answ
   const items: GradeItem[] = [];
 
   // Main conclusion
-  const studentConclusion = map.conclusion ? mapping[map.conclusion] : undefined;
+  const studentConclusion = map.conclusion && mapping[map.conclusion] ? canon(mapping[map.conclusion]) : undefined;
   if (!map.conclusion) {
     items.push({ status: 'missing', earned: 0, possible: POINTS.conclusion, message: 'Mark the main conclusion (the ★ button on a claim).' });
   } else if (studentConclusion === answer.conclusion) {
@@ -119,7 +136,13 @@ function gradeAgainst(lesson: Lesson, step: Step, map: ArgumentMap, answer: Answ
   }
 
   // Claims
-  const answerClaims = [...new Set([answer.conclusion, ...answer.relations.flatMap((r) => [...r.from, r.to])])];
+  // Required: the conclusion, the premises of required links, and targets that have no alternative.
+  const answerClaims = uniq([
+    answer.conclusion,
+    ...answer.relations.filter((r) => !r.optional).flatMap((r) => [...r.from, ...(r.to.length === 1 ? r.to : [])]),
+  ]);
+  // Anything the answer mentions at all (optional links, alternative targets) is part of the argument.
+  const argumentClaims = uniq([answer.conclusion, ...answer.relations.flatMap((r) => [...r.from, ...r.to])]);
   const missing = answerClaims.filter((id) => !nodeFor(id));
   const missingBank = missing.filter((id) => isBank(lesson.claims[id].source));
   const missingPassage = missing.filter((id) => !missingBank.includes(id));
@@ -147,7 +170,7 @@ function gradeAgainst(lesson: Lesson, step: Step, map: ArgumentMap, answer: Answ
   if (lesson.rewording === 'choose') {
     for (const id of answerClaims) {
       const node = nodeFor(id);
-      const choices = lesson.claims[id].wordingChoices;
+      const choices = node && lesson.claims[mapping[node.id]].wordingChoices;
       if (!node || !choices) continue;
       const chosen = choices.find((c) => c.text === node.text);
       if (chosen === choices[0]) {
@@ -163,8 +186,8 @@ function gradeAgainst(lesson: Lesson, step: Step, map: ArgumentMap, answer: Answ
   // Relations
   const student = map.relations.map((r) => ({
     raw: r,
-    from: r.from.map((id) => mapping[id]).filter(Boolean) as string[],
-    to: mapping[r.to] as string | undefined,
+    from: uniq(r.from.filter((id) => mapping[id]).map((id) => canon(mapping[id]))),
+    to: mapping[r.to] ? canon(mapping[r.to]) : undefined,
   }));
   const accounted = new Set<MapRelation>();
 
@@ -177,16 +200,41 @@ function gradeAgainst(lesson: Lesson, step: Step, map: ArgumentMap, answer: Answ
   let unseenLinks = 0;
   const unconnected = { ids: new Set<string>(), points: 0 };
 
+  /** Student links that express `key` with target `t`, or null if they don't (yet). */
+  const expresses = (key: (typeof answer.relations)[number], t: string) => {
+    const exact = student.find((x) => x.raw.type === key.type && x.to === t && sameSet(x.from, key.from));
+    if (exact) return [exact];
+    if (key.grouping !== 'either') return null;
+    // Any grouping: the student's links to t must split the premises into disjoint groups covering them all.
+    const parts = student.filter((x) => x.raw.type === key.type && x.to === t && x.from.length && x.from.every((f) => key.from.includes(f)));
+    const covered = parts.flatMap((x) => x.from);
+    return covered.length === key.from.length && sameSet(covered, key.from) ? parts : null;
+  };
+
   for (const key of answer.relations) {
-    const exact = student.find((s) => s.raw.type === key.type && s.to === key.to && sameSet(s.from, key.from));
-    if (exact) {
-      accounted.add(exact.raw);
-      items.push({ status: 'correct', earned: POINTS.relation, possible: POINTS.relation, message: `Correct link to ${name(key.to)}.` });
+    const match = key.to.map((t) => expresses(key, t)).find(Boolean);
+    if (match) {
+      match.forEach((x) => accounted.add(x.raw));
+      const points = key.optional ? 0 : POINTS.relation;
+      items.push({ status: 'correct', earned: points, possible: points, message: `Correct link to ${name(match[0].to!)}.` });
       continue;
     }
+    // Optional links are never required, and a wrong version of one is noted below like any other extra link.
+    if (key.optional) continue;
     const touched = (rels: typeof student) => studentNames(key.from.filter((id) => rels.some((s) => s.from.includes(id))));
-    const sameTarget = student.filter((s) => s.to === key.to && intersects(s.from, key.from));
+    const sameTarget = student.filter((s) => s.to !== undefined && key.to.includes(s.to) && intersects(s.from, key.from));
     const grouping = sameTarget.filter((s) => s.raw.type === key.type);
+    if (grouping.length && key.grouping === 'either') {
+      // Any grouping is fine here, so what's wrong is a premise that's missing or extra.
+      grouping.forEach((s) => accounted.add(s.raw));
+      items.push({
+        status: 'partial',
+        earned: POINTS.relation / 2,
+        possible: POINTS.relation,
+        message: `Your links to ${name(grouping[0].to!)} are on the right track. Check that every reason for it is connected, and nothing that isn't.`,
+      });
+      continue;
+    }
     if (grouping.length) {
       grouping.forEach((s) => accounted.add(s.raw));
       const { names, plural } = touched(grouping);
@@ -194,7 +242,7 @@ function gradeAgainst(lesson: Lesson, step: Step, map: ArgumentMap, answer: Answ
         status: 'partial',
         earned: POINTS.relation / 2,
         possible: POINTS.relation,
-        message: `Look again at how ${names} ${plural ? 'connect' : 'connects'} to ${name(key.to)}: does each premise give a reason on its own, or do some only work together with another premise?`,
+        message: `Look again at how ${names} ${plural ? 'connect' : 'connects'} to ${name(grouping[0].to!)}: does each premise give a reason on its own, or do some only work together with another premise?`,
       });
       continue;
     }
@@ -205,11 +253,11 @@ function gradeAgainst(lesson: Lesson, step: Step, map: ArgumentMap, answer: Answ
         status: 'wrong',
         earned: 0,
         possible: POINTS.relation,
-        message: `Check whether ${names} ${plural ? 'give' : 'gives'} a reason for ${name(key.to)} or ${plural ? 'raise' : 'raises'} an objection to it.`,
+        message: `Check whether ${names} ${plural ? 'give' : 'gives'} a reason for ${name(sameTarget[0].to!)} or ${plural ? 'raise' : 'raises'} an objection to it.`,
       });
       continue;
     }
-    const wrongTarget = student.filter((s) => s.raw.type === key.type && intersects(s.from, key.from) && s.to !== key.to);
+    const wrongTarget = student.filter((s) => s.raw.type === key.type && intersects(s.from, key.from) && !(s.to && key.to.includes(s.to)));
     if (wrongTarget.length) {
       wrongTarget.forEach((s) => accounted.add(s.raw));
       const { names, plural } = touched(wrongTarget);
@@ -252,7 +300,7 @@ function gradeAgainst(lesson: Lesson, step: Step, map: ArgumentMap, answer: Answ
   for (const s of student) {
     if (accounted.has(s.raw)) continue;
     const mistake = step.mistakes.find(
-      (m) => m.relation.type === s.raw.type && m.relation.to === s.to && sameSet(m.relation.from, s.from),
+      (m) => m.relation.type === s.raw.type && canon(m.relation.to) === s.to && sameSet(m.relation.from.map(canon), s.from),
     );
     const message =
       mistake?.message ??
@@ -266,7 +314,7 @@ function gradeAgainst(lesson: Lesson, step: Step, map: ArgumentMap, answer: Answ
       items.push({ status: 'note', earned: 0, possible: 0, message: `${nodeName(node.id)} repeats a claim already in your map.` });
     } else if (!claimId) {
       items.push({ status: 'note', earned: 0, possible: 0, message: `${nodeName(node.id)} doesn't match a claim in the passage. Is it background or commentary rather than part of the argument?` });
-    } else if (!answerClaims.includes(claimId) && !explained.has(claimId)) {
+    } else if (!argumentClaims.includes(canon(claimId)) && !explained.has(canon(claimId))) {
       items.push({ status: 'note', earned: 0, possible: 0, message: `${name(claimId)} isn't part of the argument. Does it give a reason for anything, or is it background?` });
     }
   }

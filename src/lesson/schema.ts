@@ -14,6 +14,17 @@ export const answerRelationSchema = z.object({
   type: relationTypeSchema,
   /** Several premises = a linked argument; separate relations = convergent. */
   from: z.array(claimId).min(1),
+  /** The claim this bears on, or a list of claims any one of which is acceptable. */
+  to: z.union([claimId, z.array(claimId).min(1)]),
+  /** `either`: linked, convergent, or any mix of groupings is accepted. */
+  grouping: z.enum(['exact', 'either']).default('exact'),
+  /** Accepted if present, but not required. */
+  optional: z.boolean().default(false),
+});
+
+const mistakeRelationSchema = z.object({
+  type: relationTypeSchema,
+  from: z.array(claimId).min(1),
   to: claimId,
 });
 
@@ -24,7 +35,7 @@ export const answerSchema = z.object({
 
 export const mistakeSchema = z.object({
   /** Shown when the student's map contains exactly this relation. */
-  relation: answerRelationSchema,
+  relation: mistakeRelationSchema,
   message: z.string(),
 });
 
@@ -84,6 +95,11 @@ export const lessonFileSchema = z.object({
    * to the student's own wording when they check their work.
    */
   modelWording: z.record(z.string(), z.string()).optional(),
+  /**
+   * Sets of claims that say the same thing (e.g. a conclusion restated).
+   * Any member of a set can stand in for any other, everywhere.
+   */
+  equivalent: z.array(z.array(claimId).min(2)).optional(),
   steps: z.array(stepSchema).min(1),
 });
 
