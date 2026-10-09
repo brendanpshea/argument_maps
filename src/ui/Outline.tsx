@@ -79,6 +79,7 @@ export function Outline({ map, onChange, nameFor, editFor }: Props) {
               {r.from.map(nameFor).join(' + ')} <strong className={r.type}>{ops.relationLabel(map, r.id)}</strong> {nameFor(r.to)}
             </span>
             <button onClick={() => onChange(ops.toggleRelationType(map, r.id))}>Switch type</button>
+            {r.from.length === 1 && <button onClick={() => onChange(ops.reverseRelation(map, r.id))}>Reverse</button>}
             <button onClick={() => onChange(ops.removeRelation(map, r.id))}>Remove</button>
           </li>
         ))}
