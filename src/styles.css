@@ -247,3 +247,7 @@ details > summary { cursor: pointer; color: var(--accent); }
 }
 .junction .eval-group button.on, .outline-eval .eval-group button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
 .outline-eval { flex: 1 1 100%; display: grid; gap: 0.4rem; padding: 0.4rem 0; }
+
+/* Explanation lessons */
+.junction-explanation button { background: #efeafa; border: 2px solid #5b3fa8; color: #5b3fa8; }
+.outline strong.explanation { color: #5b3fa8; }

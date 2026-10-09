@@ -107,7 +107,8 @@ export const removeRelation = (map: ArgumentMap, relationId: string): ArgumentMa
 export const toggleRelationType = (map: ArgumentMap, relationId: string): ArgumentMap => ({
   ...map,
   relations: map.relations.map((r) =>
-    r.id === relationId ? { ...r, type: r.type === 'support' ? 'objection' : 'support' } : r,
+    // Explanation links have no counterpart to switch to.
+    r.id === relationId && r.type !== 'explanation' ? { ...r, type: r.type === 'support' ? 'objection' : 'support' } : r,
   ),
 });
 
@@ -130,11 +131,12 @@ export const reverseRelation = (map: ArgumentMap, relationId: string): ArgumentM
   relations: map.relations.map((r) => (r.id === relationId && r.from.length === 1 ? { ...r, from: [r.to], to: r.from[0] } : r)),
 });
 
-/** "supports", "objects to", or "rebuts" (an objection aimed at an objection). */
+/** "supports", "explains", "objects to", or "rebuts" (an objection aimed at an objection). */
 export function relationLabel(map: ArgumentMap, relationId: string): string {
   const r = map.relations.find((x) => x.id === relationId);
   if (!r) return '';
   if (r.type === 'support') return 'supports';
+  if (r.type === 'explanation') return 'explains';
   const targetIsObjection = map.relations.some((o) => o.type === 'objection' && o.from.includes(r.to));
   return targetIsObjection ? 'rebuts' : 'objects to';
 }

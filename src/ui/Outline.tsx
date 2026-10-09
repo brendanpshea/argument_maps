@@ -1,9 +1,12 @@
 import { useState } from 'react';
-import type { ArgumentMap, MapNode, RelationType } from '../model/types';
+import type { ArgumentMap, LessonKind, MapNode, RelationType } from '../model/types';
+import { vocab } from '../model/vocab';
 import { EvaluationPicker, type WordingEdit } from './MapEditor';
 import * as ops from '../model/ops';
 
 interface Props {
+  /** Argument or explanation lesson: sets link types and wording. */
+  kind?: LessonKind;
   map: ArgumentMap;
   onChange: (map: ArgumentMap) => void;
   nameFor: (nodeId: string) => string;
@@ -47,10 +50,11 @@ function ClaimWording({ node, edit, label, onChange }: { node: MapNode; edit: Wo
  * A keyboard- and screen-reader-friendly way to build the same map as the
  * drag-and-drop canvas.
  */
-export function Outline({ map, onChange, nameFor, editFor, locked, evaluateFor }: Props) {
+export function Outline({ map, onChange, nameFor, editFor, locked, evaluateFor, kind = 'argument' }: Props) {
+  const explanation = kind === 'explanation';
   const [premises, setPremises] = useState<string[]>([]);
   const [target, setTarget] = useState('');
-  const [type, setType] = useState<RelationType>('support');
+  const [type, setType] = useState<RelationType>(explanation ? 'explanation' : 'support');
 
   const add = () => {
     if (!premises.length || !target) return;
@@ -69,7 +73,7 @@ export function Outline({ map, onChange, nameFor, editFor, locked, evaluateFor }
             {!locked && (
               <>
                 <label>
-                  <input type="radio" name="conclusion" checked={map.conclusion === n.id} onChange={() => onChange({ ...map, conclusion: n.id })} /> Main conclusion
+                  <input type="radio" name="conclusion" checked={map.conclusion === n.id} onChange={() => onChange({ ...map, conclusion: n.id })} /> {vocab(kind).Conclusion}
                 </label>
                 <button onClick={() => onChange(ops.removeNode(map, n.id))}>Remove</button>
               </>
@@ -96,11 +100,11 @@ export function Outline({ map, onChange, nameFor, editFor, locked, evaluateFor }
             )}
             {!locked && (
               <>
-            <button onClick={() => onChange(ops.toggleRelationType(map, r.id))}>Switch type</button>
+            {r.type !== 'explanation' && <button onClick={() => onChange(ops.toggleRelationType(map, r.id))}>Switch type</button>}
             {r.from.length === 1 && <button onClick={() => onChange(ops.reverseRelation(map, r.id))}>Reverse</button>}
             {r.from.length > 1 && <button onClick={() => onChange(ops.splitRelation(map, r.id))}>Split</button>}
             <select
-              aria-label="Link with another premise"
+              aria-label={vocab(kind).linkWith}
               value=""
               onChange={(e) => e.target.value && onChange(ops.linkPremise(map, r.id, e.target.value))}
             >
@@ -124,7 +128,7 @@ export function Outline({ map, onChange, nameFor, editFor, locked, evaluateFor }
         <fieldset className="add-link">
           <legend>Add a link</legend>
           <div>
-            Premise(s) — choose more than one for a linked argument:
+            {vocab(kind).chooseSources}
             {map.nodes.map((n) => (
               <label key={n.id} className="check">
                 <input
@@ -139,8 +143,14 @@ export function Outline({ map, onChange, nameFor, editFor, locked, evaluateFor }
           <label>
             Relation{' '}
             <select value={type} onChange={(e) => setType(e.target.value as RelationType)}>
-              <option value="support">supports</option>
-              <option value="objection">objects to / rebuts</option>
+              {explanation ? (
+                <option value="explanation">explains</option>
+              ) : (
+                <>
+                  <option value="support">supports</option>
+                  <option value="objection">objects to / rebuts</option>
+                </>
+              )}
             </select>
           </label>{' '}
           <label>

@@ -1,6 +1,9 @@
 /** Shared runtime types for lessons and student maps. */
 
-export type RelationType = 'support' | 'objection';
+export type RelationType = 'support' | 'objection' | 'explanation';
+
+/** Argument lessons map reasons for a conclusion; explanation lessons map what explains an explanandum. */
+export type LessonKind = 'argument' | 'explanation';
 
 /** A character range within one step's passage text. */
 export interface Span {
@@ -115,6 +118,7 @@ export interface Lesson {
   id: string;
   title: string;
   description?: string;
+  kind: LessonKind;
   claimMode: 'marked' | 'highlight';
   rewording: RewordingMode;
   claims: Record<string, Claim>;

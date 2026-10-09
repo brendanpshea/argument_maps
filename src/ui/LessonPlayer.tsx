@@ -4,7 +4,8 @@ import { evaluationKeys, gradeStep, hasRewordStep, matchNodes, withKeyEvaluation
 import { mapFromAnswer } from '../model/layout';
 import * as ops from '../model/ops';
 import { stableShuffle } from '../model/shuffle';
-import { emptyMap, isBank, type ArgumentMap, type ClaimSource, type Lesson, type Span } from '../model/types';
+import { emptyMap, isBank, type ArgumentMap, type ClaimSource, type Lesson, type LessonKind, type Span } from '../model/types';
+import { vocab } from '../model/vocab';
 import type { LessonProgress, ProgressStore } from '../storage/progress';
 import { downloadMapJson, readMapFile } from './exportMap';
 import { Feedback } from './Feedback';
@@ -22,12 +23,13 @@ interface Props {
 }
 
 /** The main area of a conclusion step: the claim the student picked, if any. */
-function ConclusionPick({ text, label }: { text?: string; label?: string }) {
+function ConclusionPick({ text, label, kind }: { text?: string; label?: string; kind: LessonKind }) {
+  const V = vocab(kind);
   return (
     <div className="conclusion-pick">
       {text ? (
         <div className="conclusion-card">
-          <span className="conclusion-tag">Your main conclusion</span>
+          <span className="conclusion-tag">Your {V.conclusion}</span>
           <p>
             {label && <span className="claim-number">{label} </span>}
             {text}
@@ -35,7 +37,7 @@ function ConclusionPick({ text, label }: { text?: string; label?: string }) {
           <p className="hint">Pick a different claim in the passage to change your answer.</p>
         </div>
       ) : (
-        <p className="hint">Which claim is the author ultimately trying to get you to accept? Pick it in the passage.</p>
+        <p className="hint">{V.conclusionQuestion} Pick it in the passage.</p>
       )}
     </div>
   );
@@ -210,7 +212,7 @@ export function LessonPlayer({ lesson, store, authorMode, onExit }: Props) {
             stepIndex={stepIndex}
             usedSpans={map.nodes.flatMap((n) => (isBank(n.source) ? [] : [n.source]))}
             readOnly={showModel || task === 'reword' || task === 'evaluate'}
-            addLabel={task === 'conclusion' ? 'This is the main conclusion' : undefined}
+            addLabel={task === 'conclusion' ? `This is the ${vocab(lesson.kind).conclusion}` : undefined}
             onAddClaim={(span: Span, text: string) => (task === 'conclusion' ? pickConclusion(span, text) : setMap(ops.addNode(map, text, span)))}
           />
           {task === 'structure' && (
@@ -261,6 +263,7 @@ export function LessonPlayer({ lesson, store, authorMode, onExit }: Props) {
             <details className="outline-wrap">
               <summary>Outline view (edit with the keyboard)</summary>
               <Outline
+                kind={lesson.kind}
                 map={map}
                 onChange={setMap}
                 nameFor={nameFor}
@@ -304,9 +307,14 @@ export function LessonPlayer({ lesson, store, authorMode, onExit }: Props) {
         <main className="canvas">
           {showModel && <div className="model-banner">Model answer (read-only)</div>}
           {task === 'conclusion' && !showModel ? (
-            <ConclusionPick text={map.nodes.find((n) => n.id === map.conclusion)?.text} label={map.conclusion ? numberFor(map, map.conclusion) : undefined} />
+            <ConclusionPick
+              kind={lesson.kind}
+              text={map.nodes.find((n) => n.id === map.conclusion)?.text}
+              label={map.conclusion ? numberFor(map, map.conclusion) : undefined}
+            />
           ) : (
           <MapEditor
+            kind={lesson.kind}
             key={showModel ? `model-${stepIndex}` : `mine-${stepIndex}`}
             map={showModel ? modelMap : map}
             onChange={setMap}

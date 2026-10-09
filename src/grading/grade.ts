@@ -1,3 +1,4 @@
+import { vocab } from '../model/vocab';
 import { isBank, type Answer, type ArgumentMap, type ClaimSource, type EvaluationKey, type Lesson, type MapRelation, type Span, type Step } from '../model/types';
 
 export type ItemStatus = 'correct' | 'partial' | 'wrong' | 'missing' | 'note';
@@ -203,16 +204,19 @@ function gradeConclusion(lesson: Lesson, step: Step, map: ArgumentMap): GradeRes
   const { mapping } = matchNodes(lesson, map);
   const { canon, nodeName } = namer(lesson, map, mapping);
   const one = (status: ItemStatus, earned: number, message: string) => total([{ status, earned, possible: 1, message }], mapping);
-  if (!map.conclusion) return one('missing', 0, 'Pick the claim you think is the main conclusion.');
+  const V = vocab(lesson.kind);
+  if (!map.conclusion) return one('missing', 0, `Pick the claim you think is the ${V.conclusion}${V.conclusionGloss}.`);
   const claimId = mapping[map.conclusion];
   if (!claimId) return one('wrong', 0, `${nodeName(map.conclusion)} doesn't match a claim in the passage. Select the whole claim.`);
   const picked = canon(claimId);
-  if (step.answers.some((a) => canon(a.conclusion) === picked)) return one('correct', 1, `Yes: ${nodeName(map.conclusion)} is the main conclusion.`);
+  if (step.answers.some((a) => canon(a.conclusion) === picked)) return one('correct', 1, `Yes: ${nodeName(map.conclusion)} is the ${V.conclusion}.`);
 
   const custom = step.conclusionHints[claimId] ?? step.conclusionHints[picked];
   if (custom) return one('wrong', 0, custom);
   const answer = canonicalAnswer(lesson, step.answers[0]);
-  const premiseOf = (type: string) => answer.relations.filter((r) => r.type === type && r.from.includes(picked));
+  // Explanation links play the same role as support links here.
+  const premiseOf = (type: 'support' | 'objection') =>
+    answer.relations.filter((r) => (type === 'objection' ? r.type === 'objection' : r.type !== 'objection') && r.from.includes(picked));
   const objectionPremises = answer.relations.filter((r) => r.type === 'objection').flatMap((r) => r.from);
   const objections = premiseOf('objection');
   const supported = answer.relations.some((r) => r.to.includes(picked));
@@ -223,11 +227,11 @@ function gradeConclusion(lesson: Lesson, step: Step, map: ArgumentMap): GradeRes
   } else if (objections.length) {
     hint = `Is ${subject} the author's view, or a view the author is responding to?`;
   } else if (premiseOf('support').length && supported) {
-    hint = `Something supports ${subject}, but it in turn supports another claim. Keep going: what is the author's final point?`;
+    hint = V.pickedIntermediate(subject);
   } else if (premiseOf('support').length) {
-    hint = `${subject} is offered as a reason. What is it a reason for?`;
+    hint = V.pickedPremise(subject);
   } else {
-    hint = `Does the author argue for ${subject}, or is it just setting the scene?`;
+    hint = V.pickedBackground(subject);
   }
   return one('wrong', 0, hint);
 }
@@ -282,22 +286,23 @@ function gradeAgainst(lesson: Lesson, step: Step, map: ArgumentMap, rawAnswer: A
   const { mapping, duplicates } = matchNodes(lesson, map);
   const { canon, nodeFor, name, nodeName } = namer(lesson, map, mapping);
   const answer = canonicalAnswer(lesson, rawAnswer);
-  const verb = (r: { type: string }) => (r.type === 'support' ? 'supports' : 'objects to');
+  const V = vocab(lesson.kind);
+  const verb = (r: { type: string }) => (r.type === 'support' ? 'supports' : r.type === 'explanation' ? 'explains' : 'objects to');
 
   const items: GradeItem[] = [];
 
   // Main conclusion
   const studentConclusion = map.conclusion && mapping[map.conclusion] ? canon(mapping[map.conclusion]) : undefined;
   if (!map.conclusion) {
-    items.push({ status: 'missing', earned: 0, possible: POINTS.conclusion, message: 'Mark the main conclusion (the ★ button on a claim).' });
+    items.push({ status: 'missing', earned: 0, possible: POINTS.conclusion, message: `Mark the ${V.conclusion}${V.conclusionGloss} (the ★ button on a claim).` });
   } else if (studentConclusion === answer.conclusion) {
-    items.push({ status: 'correct', earned: POINTS.conclusion, possible: POINTS.conclusion, message: `Main conclusion: ${name(answer.conclusion)}.` });
+    items.push({ status: 'correct', earned: POINTS.conclusion, possible: POINTS.conclusion, message: `${V.Conclusion}: ${name(answer.conclusion)}.` });
   } else {
     items.push({
       status: 'wrong',
       earned: 0,
       possible: POINTS.conclusion,
-      message: `${nodeName(map.conclusion)} is not the main conclusion. Ask: what is the author ultimately trying to get you to accept?`,
+      message: `${nodeName(map.conclusion)} is not the ${V.conclusion}. Ask: ${V.conclusionQuestion}`,
     });
   }
 
@@ -316,7 +321,7 @@ function gradeAgainst(lesson: Lesson, step: Step, map: ArgumentMap, rawAnswer: A
   if (missingPassage.length) {
     const message =
       lesson.claimMode === 'marked'
-        ? `Your map is missing ${claims(missingPassage.length)} from the passage. Reread it: which numbered claims give reasons, raise objections, or reply to them?`
+        ? `Your map is missing ${claims(missingPassage.length)} from the passage. ${V.findClaims}`
         : `Your map is missing ${claims(missingPassage.length)} from the passage.`;
     items.push({ status: 'missing', earned: 0, possible: POINTS.claim * missingPassage.length, message });
   }
@@ -380,7 +385,7 @@ function gradeAgainst(lesson: Lesson, step: Step, map: ArgumentMap, rawAnswer: A
         status: 'partial',
         earned: POINTS.relation / 2,
         possible: POINTS.relation,
-        message: `Your links to ${name(grouping[0].to!)} are on the right track. Check that every reason for it is connected, and nothing that isn't.`,
+        message: `Your links to ${name(grouping[0].to!)} are on the right track. Check that ${V.everyReason} is connected, and nothing that isn't.`,
       });
       continue;
     }
@@ -391,7 +396,7 @@ function gradeAgainst(lesson: Lesson, step: Step, map: ArgumentMap, rawAnswer: A
         status: 'partial',
         earned: POINTS.relation / 2,
         possible: POINTS.relation,
-        message: `Look again at how ${names} ${plural ? 'connect' : 'connects'} to ${name(grouping[0].to!)}: does each premise give a reason on its own, or do some only work together with another premise?`,
+        message: `Look again at how ${names} ${plural ? 'connect' : 'connects'} to ${name(grouping[0].to!)}: ${V.groupingQuestion}`,
       });
       continue;
     }
@@ -464,7 +469,7 @@ function gradeAgainst(lesson: Lesson, step: Step, map: ArgumentMap, rawAnswer: A
     } else if (!claimId) {
       items.push({ status: 'note', earned: 0, possible: 0, message: `${nodeName(node.id)} doesn't match a claim in the passage. Is it background or commentary rather than part of the argument?` });
     } else if (!argumentClaims.includes(canon(claimId)) && !explained.has(canon(claimId))) {
-      items.push({ status: 'note', earned: 0, possible: 0, message: `${name(claimId)} isn't part of the argument. Does it give a reason for anything, or is it background?` });
+      items.push({ status: 'note', earned: 0, possible: 0, message: V.notPart(name(claimId)) });
     }
   }
 

@@ -100,6 +100,31 @@ map best, and the hints come from that answer.
 target, optional links in and out) and fails if any of them scores below
 100%.
 
+## Explanations
+
+Set `kind: explanation` to map an explanation instead of an argument:
+
+```yaml
+kind: explanation
+steps:
+  - task: conclusion          # "Find what is being explained"
+    ...
+  - answer:
+      explanandum: e          # same as `conclusion:`; either key works
+      relations:
+        - { type: explains, from: [x3], to: e }
+        - { type: explains, from: [x1, x2], to: x3 }   # claims that only explain together
+```
+
+Everything else works as for arguments: chains, linked groups, the claim
+bank, leeway annotations, conclusion and reword steps. Students see
+"explains" links, and "Explanandum" (what is being explained) wherever an
+argument lesson says "Main conclusion". Hints and feedback use explanation
+wording. Explanation lessons can't use support/objection links or evaluate
+steps, and argument lessons can't use `explains` links.
+
+See `autumn-leaves.yaml` for an example.
+
 ## Scaffolded steps: conclusion → structure → reword
 
 Each step has a `task`, so a lesson can teach one skill at a time:
