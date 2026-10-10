@@ -256,3 +256,7 @@ details > summary { cursor: pointer; color: var(--accent); }
 .eval-badge.deductive { border-radius: 2px; border-color: #6f747c; }
 .eval-badge.inductive { border-radius: 999px; border-style: dashed; border-color: #6f747c; }
 .eval-group button { text-transform: none !important; }
+
+/* Failed inferences (judged invalid or weak): grey, not the "good" green. */
+.junction-failed > button { background: #eeeff1; border: 2px solid #646a72; color: #4f545b; }
+.failed-mark { pointer-events: none; }

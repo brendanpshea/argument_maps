@@ -1,21 +1,27 @@
 import dagre from '@dagrejs/dagre';
-import { badgeText, INDUCTIVE_DASH, QUALITY_SYMBOL, TYPE_SYMBOL } from '../model/evaluationStyle';
+import {
+  FAILED_COLOR,
+  FAILED_FILL,
+  INDUCTIVE_DASH,
+  isFailed,
+  QUALITY_SYMBOL,
+  TYPE_SYMBOL,
+  typeBadge,
+  verdictLabel,
+} from '../model/evaluationStyle';
 import { vocab } from '../model/vocab';
 import type { Diagram, DiagramLink } from './model';
 
 /** Colours match the interactive map. Failed inferences (invalid or weak) are drawn in neutral grey. */
-const COLOR = { support: '#2f7d32', objection: '#c62828', explanation: '#5b3fa8', failed: '#646a72' } as const;
-const PILL_FILL = { support: '#e8f3e8', objection: '#fbe9e9', explanation: '#efeafa', failed: '#eeeff1' } as const;
+const COLOR = { support: '#2f7d32', objection: '#c62828', explanation: '#5b3fa8', failed: FAILED_COLOR } as const;
+const PILL_FILL = { support: '#e8f3e8', objection: '#fbe9e9', explanation: '#efeafa', failed: FAILED_FILL } as const;
 
-const failed = (l: DiagramLink) => l.evaluation?.quality === 'invalid' || l.evaluation?.quality === 'weak';
+const failed = (l: DiagramLink) => isFailed(l.evaluation);
 
 /** Once a link's quality is judged, its label is the verdict ("✓ VALID", "✗ WEAK"); otherwise "SUPPORTS" etc. */
-const pillText = (d: Diagram, l: DiagramLink) =>
-  (l.evaluation?.quality ? `${QUALITY_SYMBOL[l.evaluation.quality]} ${l.evaluation.quality}` : linkLabel(d, l)).toUpperCase();
+const pillText = (d: Diagram, l: DiagramLink) => (verdictLabel(l.evaluation) ?? linkLabel(d, l)).toUpperCase();
 
-/** The badge under the label: the type, plus the quality only while it isn't the label. */
-const badgeFor = (l: DiagramLink) =>
-  !l.evaluation?.type ? '' : l.evaluation.quality ? `${TYPE_SYMBOL[l.evaluation.type]} ${l.evaluation.type}` : badgeText(l.evaluation);
+const badgeFor = (l: DiagramLink) => typeBadge(l.evaluation);
 
 /** The point halfway along a path through dagre's edge points (matching pathThrough's curve). */
 function midpoint(points: { x: number; y: number }[]): { x: number; y: number } {
