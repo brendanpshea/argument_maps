@@ -158,14 +158,14 @@ Note: Click through: the objection challenges the unstated premise (not the conc
 
 ---
 
-## Strong reasoning, challenged premise
+## Inductive strength depends on all the evidence
 
 ```argmap lesson=survey
 ```
 
-- If the premises were true, the conclusion would be likely: the reasoning is **strong**.
-- The trouble is a **premise**, and the objection already says so.
-- So criticism goes after the premises: an argument is only as good as both its reasoning *and* its premises.
+- The survey alone would make the conclusion likely, but **inductive** arguments are judged on *all* the evidence.
+- The objection stands unanswered, so the argument is **weak**.
+- Deductive arguments are different: adding information can't make a valid argument invalid.
 
 [Try it: Is the survey representative? →](./#/lesson/survey)
 
@@ -203,4 +203,4 @@ E2 => X
 - Premises can be **linked** or **convergent**; claims can form **chains**.
 - **Objections** count against a claim; **rebuttals** answer objections.
 - **Generalizations** assume the sample is representative; write that premise down, since it's where objections usually land.
-- **Deductive** arguments are valid or invalid; **inductive** ones are strong or weak.
+- **Deductive** arguments are valid or invalid; **inductive** ones are strong or weak, judged on all the evidence.

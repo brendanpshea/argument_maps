@@ -59,19 +59,21 @@ steps:
   - task: evaluate
     title: Evaluate the reasoning
     instructions: >
-      Click the label on the support link. Judge the reasoning, not the
-      premises: suppose the premises are true, and ask how well they support
-      the conclusion. Whether a premise is true is a separate question, and
-      your map already shows that one premise has been challenged.
+      Click the label on the support link. First decide whether the argument
+      is deductive or inductive, then judge it. An inductive argument is
+      judged on all the evidence on your map, not just its own premises, so
+      an objection that hasn't been answered counts against it. (A deductive
+      argument is different: if it's valid, nothing added to the map can make
+      it invalid.)
     evaluations:
       - link: { from: [s, r], to: c }
         type: inductive
-        quality: strong
+        quality: weak
         hint: >
-          Suppose both premises are true: 62% of the students who answered
-          support the later start, and those students really are
-          representative of the school. How likely is the conclusion then? The
-          reporter's point is aimed at a premise, not at the reasoning.
+          Does the speaker claim the survey guarantees the conclusion, or only
+          that it makes it likely? Then weigh everything on your map, including
+          the reporter's point, which nothing answers. How likely is the
+          conclusion now?
 
 bank:
   - id: r
