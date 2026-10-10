@@ -12,7 +12,7 @@ steps:
     title: Find the main conclusion
     instructions: >
       Read the passage. Which claim is the author ultimately trying to get you
-      to accept? Click it. (Not every numbered sentence is part of the argument.)
+      to accept? Click it. (Not every numbered claim is part of the argument.)
     passage: |
       {{x1|Zoos have existed since ancient Egypt.}} But {{c1|modern zoos should be phased out}}.
       {{c2|Large animals such as elephants suffer in captivity}}, as {{c3|they show stress

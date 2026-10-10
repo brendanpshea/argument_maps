@@ -43,12 +43,23 @@ const TAG_LINE = 16;
 /** Characters per line for wrapping (no DOM to measure text in Node); conservative for wide fonts. */
 const CHARS_PER_LINE = 25;
 
-const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+// Layout node ids: claims and link labels get different prefixes, so a claim id can never
+// collide with a link's (or with an Object.prototype name, which breaks dagre).
+const C = (id: string) => `c:${id}`;
+const L = (i: number) => `l:${i}`;
+
+// Also drops control characters that XML doesn't allow.
+const esc = (s: string) =>
+  s
+    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\uFFFE\uFFFF]/g, '')
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
 function wrap(text: string, max = CHARS_PER_LINE): string[] {
   const lines: string[] = [];
   let line = '';
-  for (const word of text.split(/\s+/).filter(Boolean)) {
+  // Words longer than a line (e.g. URLs) are broken into line-sized pieces.
+  const words = text.split(/\s+/).filter(Boolean).flatMap((w) => w.match(new RegExp(`.{1,${max}}`, 'gu')) ?? []);
+  for (const word of words) {
     if (line && (line + ' ' + word).length > max) {
       lines.push(line);
       line = word;
@@ -131,15 +142,15 @@ export function renderDiagramSvg(d: Diagram, { animate = true }: { animate?: boo
   const hasTag = (id: string) => id === d.conclusion || !!d.claims.find((c) => c.id === id)?.tag;
   for (const c of d.claims) {
     const height = PAD * 2 + claimLines.get(c.id)!.length * LINE + (hasTag(c.id) ? TAG_LINE : 0);
-    g.setNode(c.id, { width: CLAIM_WIDTH, height });
+    g.setNode(C(c.id), { width: CLAIM_WIDTH, height });
   }
   d.links.forEach((l, i) => {
     const label = pillText(d, l);
     const badge = badgeFor(l);
     const width = Math.max(label.length * 8 + 26, badgeWidth(badge) + 4);
-    g.setNode(`link${i}`, { width, height: badge ? 46 : 26 });
-    for (const f of l.from) g.setEdge(f, `link${i}`);
-    g.setEdge(`link${i}`, l.to);
+    g.setNode(L(i), { width, height: badge ? 46 : 26 });
+    for (const f of l.from) g.setEdge(C(f), L(i));
+    g.setEdge(L(i), C(l.to));
   });
   dagre.layout(g);
 
@@ -154,7 +165,7 @@ export function renderDiagramSvg(d: Diagram, { animate = true }: { animate?: boo
 
   // Each link: its lines, label, and badge. Drawn after the claim boxes so arrowheads stay visible.
   const linkEls = d.links.map((l, i) => {
-    const id = `link${i}`;
+    const id = L(i);
     const n = g.node(id);
     const fail = failed(l);
     const tone = fail ? 'failed' : l.type;
@@ -163,9 +174,9 @@ export function renderDiagramSvg(d: Diagram, { animate = true }: { animate?: boo
     const inductive = l.evaluation?.type === 'inductive';
     const dash = inductive ? ` stroke-dasharray="${INDUCTIVE_DASH}"` : '';
     const marker = `url(#${arrowId}-${tone}${inductive ? '-open' : ''})`;
-    const outPoints = g.edge(id, l.to).points;
+    const outPoints = g.edge(id, C(l.to)).points;
     const lines = [
-      ...l.from.map((f) => `<path d="${pathThrough(g.edge(f, id).points)}" fill="none" stroke="${color}" stroke-width="2.5"${dash}/>`),
+      ...l.from.map((f) => `<path d="${pathThrough(g.edge(C(f), id).points)}" fill="none" stroke="${color}" stroke-width="2.5"${dash}/>`),
       `<path d="${pathThrough(outPoints)}" fill="none" stroke="${color}" stroke-width="2.5"${dash} marker-end="${marker}"/>`,
     ];
     if (fail) {
@@ -194,7 +205,7 @@ export function renderDiagramSvg(d: Diagram, { animate = true }: { animate?: boo
 
   const spans = statusSpans(d, animate);
   const claimEls = d.claims.map((c) => {
-    const n = g.node(c.id);
+    const n = g.node(C(c.id));
     const x = n.x - n.width / 2;
     const y = n.y - n.height / 2;
     const isConclusion = c.id === d.conclusion;
@@ -217,7 +228,7 @@ export function renderDiagramSvg(d: Diagram, { animate = true }: { animate?: boo
 
   // Each claim's status in the debate: a pill on its top edge, and an amber border while challenged.
   const statusEls = d.claims.flatMap((c) => {
-    const n = g.node(c.id);
+    const n = g.node(C(c.id));
     const x = n.x - n.width / 2;
     const y = n.y - n.height / 2;
     return (spans.get(c.id) ?? []).map(([from, until, status]) => {

@@ -29,6 +29,7 @@ export function compileLesson(yamlSource: string, fileName = 'lesson'): Lesson {
     const passage = parsePassage(stepFile.passage);
     for (const c of passage.claims) {
       if (claims[c.id]) fail(`claim "${c.id}" is marked more than once`);
+      if (!c.text.trim()) fail(`claim "${c.id}" is empty`);
       const choices = file.wordingChoices?.[c.id];
       claims[c.id] = {
         id: c.id,
@@ -88,6 +89,11 @@ export function compileLesson(yamlSource: string, fileName = 'lesson'): Lesson {
       }
       return { from: e.link.from, to: e.link.to, type: e.type, quality, hint: e.hint };
     });
+    for (const m of stepFile.mistakes ?? []) {
+      for (const id of [...m.relation.from, m.relation.to]) {
+        if (!claims[id]) fail(`step ${segment + 1} mistakes refer to "${id}", which is not a claim in this or an earlier step`);
+      }
+    }
     for (const id of Object.keys(stepFile.conclusionHints ?? {})) {
       if (!claims[id]) fail(`step ${segment + 1} conclusionHints has "${id}", which is not a claim in this or an earlier step`);
     }
@@ -148,6 +154,7 @@ export function compileLesson(yamlSource: string, fileName = 'lesson'): Lesson {
         if (!rel) fail(`${label} is not a link in the answer being evaluated`);
         if (rel!.type !== 'support') fail(`${label} is an objection; only support links are evaluated`);
         if (rel!.grouping === 'either') fail(`${label} has \`grouping: either\`; evaluated links need a fixed grouping`);
+        if (rel!.to.length > 1) fail(`${label} has more than one acceptable target; evaluated links need a single target`);
       }
     }
   });
@@ -171,8 +178,31 @@ export function compileLesson(yamlSource: string, fileName = 'lesson'): Lesson {
       equivalent[id] = group[0];
     }
   }
+  // With equivalent claims merged: no link from a claim to itself, and no premises that
+  // both support and object to the same claim (a student can't draw both).
+  const canon = (id: string) => equivalent[id] ?? id;
+  steps.forEach((step, i) => {
+    if (step.task !== 'structure') return;
+    for (const a of step.answers) {
+      for (const r of a.relations) {
+        if (r.from.some((f) => r.to.some((t) => canon(t) === canon(f)))) fail(`step ${i + 1}: a link goes from a claim to an equivalent one`);
+      }
+      for (const r of a.relations) {
+        const clash = a.relations.find(
+          (o) => o !== r && o.type !== r.type && o.to.some((t) => r.to.includes(t)) && o.from.length === r.from.length && o.from.every((f) => r.from.includes(f)),
+        );
+        if (clash) fail(`step ${i + 1}: ${r.from.join(' + ')} both ${r.type === 'support' ? 'supports' : 'objects to'} and ${clash.type === 'support' ? 'supports' : 'objects to'} the same claim`);
+      }
+    }
+  });
   if (file.wordingChoices && file.rewording !== 'choose') {
     fail('wordingChoices are only used with `rewording: choose`');
+  }
+  // A wording choice must differ from the passage wording ("As written" earns nothing) and from the other choices.
+  for (const [id, choices] of Object.entries(file.wordingChoices ?? {})) {
+    const texts = [choices.best, ...choices.others.map((o) => o.text)].map((t) => t.trim());
+    if (claims[id] && texts.includes(claims[id].passageText.trim())) fail(`wordingChoices for "${id}" include the passage wording itself`);
+    if (new Set(texts).size !== texts.length) fail(`wordingChoices for "${id}" list the same wording twice`);
   }
 
   return {

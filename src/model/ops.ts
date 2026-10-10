@@ -4,6 +4,15 @@ import type { ArgumentMap, ClaimSource, Evaluation, MapNode, RelationType } from
 let counter = 0;
 const newId = (prefix: string) => `${prefix}${Date.now().toString(36)}${(counter++).toString(36)}`;
 
+const sameLink = (a: { from: string[]; to: string }, b: { from: string[]; to: string }) =>
+  a.to === b.to && a.from.length === b.from.length && a.from.every((f) => b.from.includes(f));
+
+/** Drops any link that repeats an earlier one exactly (same kind, premises and target). */
+const dedupe = (map: ArgumentMap): ArgumentMap => ({
+  ...map,
+  relations: map.relations.filter((r, i) => !map.relations.slice(0, i).some((o) => o.type === r.type && sameLink(o, r))),
+});
+
 export function addNode(map: ArgumentMap, text: string, source: ClaimSource, position?: { x: number; y: number }): ArgumentMap {
   const i = map.nodes.length;
   const node: MapNode = {
@@ -17,14 +26,14 @@ export function addNode(map: ArgumentMap, text: string, source: ClaimSource, pos
 
 /** Removes a claim, along with any relation left without premises or a target. */
 export function removeNode(map: ArgumentMap, nodeId: string): ArgumentMap {
-  return {
+  return dedupe({
     nodes: map.nodes.filter((n) => n.id !== nodeId),
     relations: map.relations
       .filter((r) => r.to !== nodeId)
       .map((r) => ({ ...r, from: r.from.filter((f) => f !== nodeId) }))
       .filter((r) => r.from.length > 0),
     conclusion: map.conclusion === nodeId ? undefined : map.conclusion,
-  };
+  });
 }
 
 export const setText = (map: ArgumentMap, nodeId: string, text: string): ArgumentMap => ({
@@ -39,22 +48,21 @@ export const toggleConclusion = (map: ArgumentMap, nodeId: string): ArgumentMap 
 
 /** Adds a single-premise relation. Ignores self-links and exact duplicates. */
 export function addRelation(map: ArgumentMap, type: RelationType, from: string[], to: string): ArgumentMap {
+  from = [...new Set(from)];
   if (from.length === 0 || from.includes(to)) return map;
-  const exists = map.relations.some(
-    (r) => r.to === to && r.from.length === from.length && r.from.every((f) => from.includes(f)),
-  );
-  if (exists) return map;
-  return { ...map, relations: [...map.relations, { id: newId('r'), type, from: [...from], to }] };
+  if (map.relations.some((r) => sameLink(r, { from, to }))) return map;
+  return { ...map, relations: [...map.relations, { id: newId('r'), type, from, to }] };
 }
 
 /** Adds a premise to an existing relation, making it (more) linked. */
 export function addPremise(map: ArgumentMap, relationId: string, nodeId: string): ArgumentMap {
-  return {
+  if (!map.nodes.some((n) => n.id === nodeId)) return map;
+  return dedupe({
     ...map,
     relations: map.relations.map((r) =>
       r.id === relationId && r.to !== nodeId && !r.from.includes(nodeId) ? { ...r, from: [...r.from, nodeId] } : r,
     ),
-  };
+  });
 }
 
 /**
@@ -80,23 +88,23 @@ export function splitRelation(map: ArgumentMap, relationId: string): ArgumentMap
   const rel = map.relations.find((r) => r.id === relationId);
   if (!rel || rel.from.length < 2) return map;
   const [first, ...rest] = rel.from;
-  return {
+  return dedupe({
     ...map,
     relations: map.relations.flatMap((r) =>
       r.id === relationId
         ? [{ ...r, from: [first], position: undefined }, ...rest.map((f) => ({ id: newId('r'), type: r.type, from: [f], to: r.to }))]
         : [r],
     ),
-  };
+  });
 }
 
 export function removePremise(map: ArgumentMap, relationId: string, nodeId: string): ArgumentMap {
-  return {
+  return dedupe({
     ...map,
     relations: map.relations
       .map((r) => (r.id === relationId ? { ...r, from: r.from.filter((f) => f !== nodeId) } : r))
       .filter((r) => r.from.length > 0),
-  };
+  });
 }
 
 export const removeRelation = (map: ArgumentMap, relationId: string): ArgumentMap => ({
@@ -108,7 +116,8 @@ export const toggleRelationType = (map: ArgumentMap, relationId: string): Argume
   ...map,
   relations: map.relations.map((r) =>
     // Explanation links have no counterpart to switch to.
-    r.id === relationId && r.type !== 'explanation' ? { ...r, type: r.type === 'support' ? 'objection' : 'support' } : r,
+    // A judgement of the inference no longer applies once the link's kind changes.
+    r.id === relationId && r.type !== 'explanation' ? { ...r, type: r.type === 'support' ? 'objection' : 'support', evaluation: undefined } : r,
   ),
 });
 
@@ -126,10 +135,15 @@ export const setEvaluation = (map: ArgumentMap, relationId: string, evaluation: 
 });
 
 /** Swaps premise and target of a single-premise relation. */
-export const reverseRelation = (map: ArgumentMap, relationId: string): ArgumentMap => ({
-  ...map,
-  relations: map.relations.map((r) => (r.id === relationId && r.from.length === 1 ? { ...r, from: [r.to], to: r.from[0] } : r)),
-});
+export const reverseRelation = (map: ArgumentMap, relationId: string): ArgumentMap => {
+  const rel = map.relations.find((r) => r.id === relationId);
+  // Reversing onto a link that already exists would duplicate it.
+  if (!rel || rel.from.length !== 1 || map.relations.some((o) => o !== rel && sameLink(o, { from: [rel.to], to: rel.from[0] }))) return map;
+  return {
+    ...map,
+    relations: map.relations.map((r) => (r === rel ? { ...r, from: [r.to], to: r.from[0], evaluation: undefined } : r)),
+  };
+};
 
 /** "supports", "explains", "objects to", or "rebuts" (an objection aimed at an objection). */
 export function relationLabel(map: ArgumentMap, relationId: string): string {

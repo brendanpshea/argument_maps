@@ -50,15 +50,17 @@ if (!deck) {
 } else {
   document.title = deck.title;
   // The whole deck goes through reveal.js's Markdown plugin: --- separates slides, Note: starts speaker notes.
-  const template = deck.markdown.replace(/<\/textarea>/gi, '&lt;/textarea>');
   root.innerHTML = `
     <div class="reveal">
       <div class="slides">
         <section data-markdown data-separator="^---$" data-separator-notes="^Note:">
-          <textarea data-template>${template}</textarea>
+          <textarea data-template></textarea>
         </section>
       </div>
     </div>`;
+  // Set the Markdown as text, not HTML: inside a textarea, innerHTML would decode the
+  // entities in the rendered diagrams (&quot;, &lt;, &amp;) back into raw characters.
+  root.querySelector('textarea')!.textContent = deck.markdown;
   void Reveal.initialize({ hash: true, slideNumber: 'c/t', plugins: [Markdown, Notes], width: 1280, height: 800, margin: 0.06,
     // PDF handouts: one page per slide, showing every step.
     pdfSeparateFragments: false,

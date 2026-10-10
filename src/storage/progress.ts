@@ -23,11 +23,24 @@ export interface ProgressStore {
 
 const key = (lessonId: string) => `argument-maps:lesson:${lessonId}`;
 
+const isMap = (m: unknown): m is ArgumentMap =>
+  !!m && typeof m === 'object' && Array.isArray((m as ArgumentMap).nodes) && Array.isArray((m as ArgumentMap).relations);
+
+/** Saved progress in the shape we expect, or null (e.g. corrupt, or saved by an older version). */
+export function validProgress(data: unknown): LessonProgress | null {
+  if (!data || typeof data !== 'object') return null;
+  const p = data as LessonProgress;
+  if (!Number.isInteger(p.stepIndex) || p.stepIndex < 0) return null;
+  if (!Array.isArray(p.maps) || !p.maps.every(isMap)) return null;
+  if (!Array.isArray(p.scores)) return null;
+  return { ...p, completed: !!p.completed };
+}
+
 export const localProgressStore: ProgressStore = {
   load(lessonId) {
     try {
       const raw = localStorage.getItem(key(lessonId));
-      return raw ? (JSON.parse(raw) as LessonProgress) : null;
+      return raw ? validProgress(JSON.parse(raw)) : null;
     } catch {
       return null;
     }

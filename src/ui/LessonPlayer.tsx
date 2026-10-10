@@ -47,7 +47,11 @@ const fresh = (): LessonProgress => ({ stepIndex: 0, maps: [emptyMap()], scores:
 const truncate = (s: string, n = 40) => (s.length > n ? `${s.slice(0, n - 1).trimEnd()}…` : s);
 
 export function LessonPlayer({ lesson, store, authorMode, onExit }: Props) {
-  const [progress, setProgress] = useState<LessonProgress>(() => store.load(lesson.id) ?? fresh());
+  const [progress, setProgress] = useState<LessonProgress>(() => {
+    const saved = store.load(lesson.id);
+    // Saved before the lesson was shortened: start again rather than point past the last step.
+    return saved && saved.stepIndex < lesson.steps.length ? saved : fresh();
+  });
   const [result, setResult] = useState<GradeResult | null>(null);
   const [showModel, setShowModel] = useState(false);
   const [message, setMessage] = useState('');
@@ -74,7 +78,7 @@ export function LessonPlayer({ lesson, store, authorMode, onExit }: Props) {
   const originalTextOf = (source: ClaimSource) =>
     isBank(source)
       ? lesson.claims[source.bank]?.passageText ?? ''
-      : lesson.steps[source.segment].passage.slice(source.start, source.end).trim();
+      : (lesson.steps[source.segment]?.passage ?? '').slice(source.start, source.end).trim();
   const editFor = (m: ArgumentMap, nodeId: string): WordingEdit => {
     const node = nodeById(m, nodeId);
     if (!node || lesson.rewording === 'none' || isBank(node.source)) return { kind: 'none' };

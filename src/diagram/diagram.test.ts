@@ -128,6 +128,57 @@ describe('challenged and answered claims', () => {
   });
 });
 
+describe('diagram edge cases', () => {
+  it('rejects empty diagrams, duplicate links and repeated premises', () => {
+    expect(parseArgmap('').errors.join()).toMatch(/empty/);
+    expect(parseArgmap('C: c\nP: p\nP -> C\nP -> C').errors.join()).toMatch(/already in the diagram/);
+    expect(parseArgmap('C: c\nP: p\nP + P -> C').errors.join()).toMatch(/listed twice/);
+  });
+
+  it('accepts @n and [evaluation] in either order', () => {
+    for (const line of ['P -> C @2 [deductive, valid]', 'P -> C [deductive, valid] @2']) {
+      const { diagram, errors } = parseArgmap(`C*: c\nP: p\n${line}`);
+      expect(errors).toEqual([]);
+      expect(diagram.links[0]).toMatchObject({ step: 2, evaluation: { type: 'deductive', quality: 'valid' } });
+    }
+    // Brackets in a claim's text are just text.
+    expect(parseArgmap('C*: Smith [sic] said so').diagram.claims[0].text).toBe('Smith [sic] said so');
+  });
+
+  it('copes with claim ids that clash with internal names', () => {
+    for (const id of ['link0', 'l:0', 'constructor', 'toString']) {
+      const safe = id.replace(':', '-');
+      const { diagram, errors } = parseArgmap(`${safe}*: first\nP: p\nQ: q\nP -> ${safe}\nQ -x P`);
+      expect(errors).toEqual([]);
+      const svg = renderDiagramSvg(diagram);
+      expect(svg).not.toMatch(/NaN|undefined|Infinity/);
+      expect(svg).toContain('MAIN CONCLUSION');
+    }
+  });
+
+  it('escapes text, drops characters XML forbids, and breaks very long words', () => {
+    const { diagram } = parseArgmap('C*: He said "hi" & x < y\u0001\nP: https://example.com/a/very/long/path/that/never/ends\nP -> C');
+    const svg = renderDiagramSvg(diagram);
+    expect(svg).toContain('He said &quot;hi&quot; &amp; x &lt; y');
+    expect(svg).not.toContain('\u0001');
+    const lines = [...svg.matchAll(/<text [^>]*font-size="15"[^>]*>([^<]*)<\/text>/g)].map((m) => m[1]);
+    expect(lines.filter((l) => l.includes("example")).every((l) => l.length <= 25)).toBe(true);
+    expect(lines.filter((l) => !l.includes("&")).join("")).toContain("https://example.com/a/ver");
+  });
+
+  it('settles mutual objections the same way whatever their order', () => {
+    const ab = claimStatuses([{ type: 'objection', from: ['A'], to: 'B' }, { type: 'objection', from: ['B'], to: 'A' }]);
+    const ba = claimStatuses([{ type: 'objection', from: ['B'], to: 'A' }, { type: 'objection', from: ['A'], to: 'B' }]);
+    expect(ab.get('A')).toBe(ab.get('B'));
+    expect(ba.get('A')).toBe(ab.get('A'));
+  });
+
+  it('takes the deck title from the slides, not from a comment in a diagram', () => {
+    const deck = buildDeck('t', '```argmap\n# a comment\nC: c\n```\n\n# Real Title\n', () => undefined);
+    expect(deck.title).toBe('Real Title');
+  });
+});
+
 describe('decks', () => {
   const decks = readdirSync(join(root, 'decks')).filter((f) => f.endsWith('.md') && f !== 'README.md');
 
