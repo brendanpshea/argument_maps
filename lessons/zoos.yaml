@@ -16,11 +16,11 @@ steps:
     passage: |
       {{x1|Zoos have existed since ancient Egypt.}} But {{c1|modern zoos should be phased out}}.
       {{c2|Large animals such as elephants suffer in captivity}}, as {{c3|they show stress
-      behaviors like pacing and swaying that are almost never seen in the wild}}. Moreover,
-      {{c4|zoos justify themselves mainly by appeal to conservation}}, yet {{c5|most species
-      kept in zoos are not endangered}}.
+      behaviors like pacing and swaying that are almost never seen in the wild}}.
 
-      Some argue that {{c6|zoos inspire children to care about wildlife}}. But {{c7|nature
+      Defenders of zoos reply that {{c4|they are justified by their role in conservation}}.
+      Yet {{c5|most species kept in zoos are not endangered}}. Others argue that {{c6|zoos
+      inspire children to care about wildlife}}. But {{c7|nature
       documentaries and wildlife sanctuaries can inspire children just as well}}.
     conclusionHints:
       x1: >
@@ -49,7 +49,7 @@ steps:
           what does (6) do to it?
       - relation: { type: support, from: [c5], to: c1 }
         message: >
-          What is (6) responding to? Look at the “yet” just before it.
+          What is (6) responding to? Look at the “Yet” that introduces it.
       - relation: { type: support, from: [c3], to: c1 }
         message: >
           Does (4) bear on the conclusion directly, or is it evidence for
@@ -76,12 +76,12 @@ wordingChoices:
       - text: Elephants in the wild often pace and sway.
         why: That reverses the claim. These behaviors are almost never seen in the wild.
   c4:
-    best: Zoos' main justification for existing is that they help conservation.
+    best: Zoos are justified by their role in conservation.
     others:
-      - text: Zoos help conservation.
-        why: The author says zoos claim to help conservation, not that they actually do.
+      - text: They help conservation.
+        why: “They” isn't clear on its own, and this drops the point that conservation is what justifies zoos.
       - text: Conservation is important.
-        why: That changes the subject. The claim is about how zoos justify themselves.
+        why: That changes the subject. The claim is about what justifies zoos.
   c7:
     best: Nature documentaries and wildlife sanctuaries can inspire children to care about wildlife as well as zoos do.
     others:
