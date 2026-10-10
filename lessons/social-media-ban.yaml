@@ -33,7 +33,7 @@ steps:
   - title: New evidence
     instructions: >
       A newspaper reports a new study. Add it to your map. Which claim does it
-      bear on most directly?
+      support?
     passage: |
       A follow-up report adds that {{s4|in one large study, teens who took a month-long
       break from social media reported significantly better mood}}.
@@ -41,12 +41,8 @@ steps:
       conclusion: s1
       relations:
         - { type: support, from: [s2, s3], to: s1, grouping: either }
-        - { type: support, from: [s4], to: s2 }
-    mistakes:
-      - relation: { type: support, from: [s4], to: s1 }
-        message: >
-          What does the study show, exactly? Is that a direct reason for the
-          ban, or evidence for one of the premises?
+        # The study is evidence for the premise, or (as a test of cause) a direct reason for the ban.
+        - { type: support, from: [s4], to: [s2, s1] }
 
   - title: Objection and reply
     instructions: >
@@ -60,7 +56,8 @@ steps:
       conclusion: s1
       relations:
         - { type: support, from: [s2, s3], to: s1, grouping: either }
-        - { type: support, from: [s4], to: s2 }
+        # The study is evidence for the premise, or (as a test of cause) a direct reason for the ban.
+        - { type: support, from: [s4], to: [s2, s1] }
         - { type: objection, from: [s5], to: s1 }
         - { type: rebuttal, from: [s6], to: s5 }
     mistakes:

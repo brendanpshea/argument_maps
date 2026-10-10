@@ -42,14 +42,14 @@ Note: Click once to add the evidence for the intermediate conclusion.
 
 ```argmap
 C*: Modern zoos should be phased out
-P1: Large animals suffer in captivity
-P2: Zoos justify themselves mainly by appeal to conservation
-P3: Most species kept in zoos are not endangered
+P1: Large animals such as elephants suffer in captivity
+P2: Elephants need to roam many miles a day to stay healthy
+P3: Zoo enclosures give elephants a tiny fraction of that space
 P1 -> C
-P2 + P3 -> C  @2
+P2 + P3 -> P1  @2
 ```
 
-Note: P2 alone doesn't support C, and neither does P3. Together: the main justification fails. Ask: "If you deleted P2, would P3 still be a reason?"
+Note: P2 alone says nothing about zoos, and P3 alone doesn't say why space matters. Together they support P1. Ask: "If you deleted P2, would P3 still be a reason?"
 
 ---
 
@@ -120,7 +120,7 @@ Note: Ask for other reasons someone might be nervous at dinner.
 
 ```argmap
 C*: The butler is the thief
-P1: His fingerprints were on the jewel cases inside the safe
+P1: The missing jewels were found hidden in his room
 P2: In mystery novels, the butler is often the culprit
 P1 -> C  [inductive, strong]
 P2 -> C  [inductive, weak]  @2

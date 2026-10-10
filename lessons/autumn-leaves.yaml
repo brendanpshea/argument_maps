@@ -41,9 +41,9 @@ steps:
     answer:
       explanandum: e
       relations:
-        - { type: explains, from: [y], to: e }
+        # Each explains part of the color change; read together or separately.
+        - { type: explains, from: [y, r], to: e, grouping: either }
         - { type: explains, from: [x1, x2, x3], to: y }
-        - { type: explains, from: [r], to: e }
         - { type: explains, from: [r1, r2], to: r }
     mistakes:
       - relation: { type: explains, from: [x1, x2, x3], to: e }

@@ -120,15 +120,17 @@ describe('gradeStep', () => {
   };
 
   it('gives partial credit when linked premises are drawn as convergent', () => {
+    const butler = load('butler.yaml');
+    const bnode = (id: string): MapNode => ({ id, text: butler.claims[id].passageText, source: butler.claims[id].source, position: { x: 0, y: 0 } });
     const map: ArgumentMap = {
-      nodes: ['c1', 'c4', 'c5'].map((id) => node(id)),
+      nodes: ['c', 'p1', 'p2'].map(bnode),
       relations: [
-        { id: 'r1', type: 'support', from: ['c4'], to: 'c1' },
-        { id: 'r2', type: 'support', from: ['c5'], to: 'c1' },
+        { id: 'r1', type: 'support', from: ['p1'], to: 'c' },
+        { id: 'r2', type: 'support', from: ['p2'], to: 'c' },
       ],
-      conclusion: 'c1',
+      conclusion: 'c',
     };
-    const result = gradeStep(zoos, 1, map);
+    const result = gradeStep(butler, 1, map);
     const partial = result.items.filter((i) => i.status === 'partial');
     expect(partial).toHaveLength(1);
     expect(partial[0].message).toMatch(/work together/);
