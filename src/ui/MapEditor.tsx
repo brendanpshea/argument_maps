@@ -27,7 +27,7 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { toPng } from 'html-to-image';
-import { badgeText, INDUCTIVE_DASH, optionLabel } from '../model/evaluationStyle';
+import { FAILED_COLOR, INDUCTIVE_DASH, isFailed, optionLabel, typeBadge, verdictLabel } from '../model/evaluationStyle';
 import { vocab } from '../model/vocab';
 import { QUALITIES, type LessonKind, type ArgumentMap, type Evaluation, type InferenceQuality, type InferenceType, type MapRelation, type RelationType } from '../model/types';
 import { autoLayout, CLAIM_SIZE, JUNCTION_SIZE } from '../model/layout';
@@ -65,7 +65,7 @@ type JunctionData = {
   evaluate?: 'type' | 'full';
   kind: LessonKind;
 };
-type LinkEdgeT = Edge<{ readOnly: boolean; title: string }, 'link'>;
+type LinkEdgeT = Edge<{ readOnly: boolean; title: string; failed?: boolean }, 'link'>;
 type ClaimNodeT = Node<ClaimData, 'claim'>;
 type JunctionNodeT = Node<JunctionData, 'junction'>;
 
@@ -203,7 +203,7 @@ function JunctionNode({ id, data, selected }: NodeProps<JunctionNodeT>) {
   };
   const ev = data.evaluation;
   return (
-    <div className={`junction junction-${data.type}`}>
+    <div className={`junction junction-${isFailed(data.evaluation) ? 'failed' : data.type}`}>
       <SideHandles />
       <button
         className="nodrag"
@@ -213,10 +213,11 @@ function JunctionNode({ id, data, selected }: NodeProps<JunctionNodeT>) {
         title={data.evaluate ? 'Evaluate this reasoning' : data.readOnly ? undefined : 'Change or delete this link'}
         onClick={() => setOpen(!open)}
       >
-        {data.label}
+        {/* Once the student judges the quality, the label is their verdict ("✓ valid", "✗ weak"). */}
+        {verdictLabel(data.evaluation) ?? data.label}
       </button>
       {ev?.type ? (
-        <span className={`eval-badge ${ev.type}`}>{badgeText(ev)}</span>
+        <span className={`eval-badge ${ev.type}`}>{typeBadge(ev)}</span>
       ) : (
         data.evaluate && <span className="eval-badge todo">evaluate?</span>
       )}
@@ -322,6 +323,15 @@ function LinkEdge({ id, sourceX, sourceY, targetX, targetY, sourcePosition, targ
   return (
     <>
       <BaseEdge id={id} path={path} style={{ ...style, strokeWidth: selected ? 4 : 2 }} markerEnd={markerEnd} interactionWidth={24} />
+      {data?.failed && (
+        // A failed inference "doesn't get through": a circled ✗ breaks the line into the conclusion.
+        <g className="failed-mark" aria-hidden="true">
+          <circle cx={labelX} cy={labelY} r={9} fill="#fff" stroke={FAILED_COLOR} strokeWidth={2} />
+          <text x={labelX} y={labelY + 4.5} textAnchor="middle" fontSize={12} fontWeight={700} fill={FAILED_COLOR}>
+            ✗
+          </text>
+        </g>
+      )}
       {selected && !data?.readOnly && (
         <EdgeLabelRenderer>
           <button
@@ -449,7 +459,9 @@ function buildEdges(map: ArgumentMap, prev: Edge[], readOnly: boolean, kind: Les
     return dy >= 0 ? { sourceHandle: 'bottom', targetHandle: 'top' } : { sourceHandle: 'top', targetHandle: 'bottom' };
   };
   return map.relations.flatMap((r): LinkEdgeT[] => {
-    const stroke = COLORS[r.type];
+    // Failed inferences (judged invalid or weak) are grey, whatever the link type.
+    const failed = isFailed(r.evaluation);
+    const stroke = failed ? FAILED_COLOR : COLORS[r.type];
     const linked = r.from.length > 1;
     // Once a link has been evaluated as inductive, it's drawn dashed with an open arrowhead.
     const inductive = r.evaluation?.type === 'inductive';
@@ -476,7 +488,7 @@ function buildEdges(map: ArgumentMap, prev: Edge[], readOnly: boolean, kind: Les
           ? { type: MarkerType.Arrow, color: stroke, width: 22, height: 22, strokeWidth: 1.6 }
           : { type: MarkerType.ArrowClosed, color: stroke },
         selected: selected.has(`o|${r.id}`),
-        data: { readOnly, title: 'Delete this link' },
+        data: { readOnly, title: 'Delete this link', failed },
       },
     ];
   });

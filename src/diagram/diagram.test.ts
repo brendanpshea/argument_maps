@@ -75,7 +75,11 @@ describe('decks', () => {
 
   it('renders lesson references, including evaluation badges and explanations', () => {
     const deck = buildDeck('t', '```argmap lesson=butler\n```\n\n```argmap lesson=autumn-leaves step=2\n```\n\n```argmap lesson=nope\n```', (id) => lessons.get(id));
-    expect(deck.diagrams[0].svg).toContain('∴ deductive · ✗ invalid');
+    // Judged links show the verdict as the label and the type in the badge; failed ones are broken by a ✗.
+    expect(deck.diagrams[0].svg).toContain('✗ INVALID');
+    expect(deck.diagrams[0].svg).toContain('✓ VALID');
+    expect(deck.diagrams[0].svg).toContain('∴ deductive');
+    expect(deck.diagrams[0].svg).toContain('#646a72'); // failed links are grey
     expect(deck.diagrams[0].svg).toContain('stroke-dasharray'); // inductive links are dashed
     expect(deck.diagrams[0].svg).toContain('argmap-legend');
     expect(deck.diagrams[0].svg).toContain('The butler is the thief'); // capitalised for display

@@ -24,3 +24,14 @@ export function badgeText(e: Evaluation): string {
 /** The same choices with their symbols, for buttons. */
 export const optionLabel = (o: InferenceType | InferenceQuality) =>
   `${o in TYPE_SYMBOL ? TYPE_SYMBOL[o as InferenceType] : QUALITY_SYMBOL[o as InferenceQuality]} ${o}`;
+
+/** Invalid and weak inferences fail; they're drawn grey and broken by a ✗. */
+export const isFailed = (e?: Evaluation) => e?.quality === 'invalid' || e?.quality === 'weak';
+export const FAILED_COLOR = '#646a72';
+export const FAILED_FILL = '#eeeff1';
+
+/** Once the quality is judged, a link's label is the verdict: "✓ valid", "✗ weak". */
+export const verdictLabel = (e?: Evaluation) => (e?.quality ? `${QUALITY_SYMBOL[e.quality]} ${e.quality}` : undefined);
+
+/** The badge under the label: the type, plus the quality only while it isn't already the label. */
+export const typeBadge = (e?: Evaluation) => (!e?.type ? '' : e.quality ? `${TYPE_SYMBOL[e.type]} ${e.type}` : badgeText(e));

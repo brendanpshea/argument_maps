@@ -43,7 +43,7 @@ O -x C
 | `A -x B` | A objects to B. An objection to an objection is labelled *rebuts* automatically. |
 | `A => B` | A explains B. Using `=>` makes the diagram an explanation (the conclusion becomes the **explanandum**). |
 | `… [deductive, valid]` | An evaluation badge on a link: `deductive`/`inductive` and `valid`/`invalid`/`strong`/`weak`. |
-| | Evaluated links are styled so the type doesn't depend on colour: **deductive** links are solid with a filled arrowhead and a square-cornered "∴ deductive" badge; **inductive** links are dashed with an open arrowhead and a rounded "≈ inductive" badge. ✓ marks valid/strong and ✗ invalid/weak. Diagrams with evaluated links get a key along the bottom. |
+| | Evaluated links are styled so nothing depends on colour alone. The **type** shows in the line and badge: deductive links are solid with a filled arrowhead and a square-cornered "∴ deductive" badge; inductive links are dashed with an open arrowhead and a rounded "≈ inductive" badge. The **verdict** becomes the link's label ("✓ VALID", "✓ STRONG", "✗ INVALID", "✗ WEAK"), and failed links (invalid or weak) are grey and broken by a circled ✗. Diagrams with evaluated links get a key along the bottom. |
 | `… @2` | Appear on the 2nd click (on a claim or a link). Links appear no earlier than their claims. |
 | `# …` or `// …` | A comment. |
 
