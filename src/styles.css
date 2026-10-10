@@ -72,7 +72,16 @@ button.link-button { border: none; background: none; color: var(--accent); paddi
 .instructions { margin: 0; padding: 0.6rem 0.8rem; background: #eef3f9; border-radius: 8px; font-size: 0.95rem; }
 .actions { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
 
-@media (max-width: 800px) {
+/* Portrait tablets: the passage and controls go above the map, which gets the full width.
+   Each half scrolls on its own, so both stay on screen. */
+@media (max-width: 1100px) and (orientation: portrait) and (min-width: 601px) {
+  .player { height: 100dvh; }
+  .player-body { flex-direction: column; }
+  .side { width: 100%; max-height: 42dvh; border-right: none; border-bottom: 1px solid var(--border); }
+  .canvas { flex: 1; min-height: 0; }
+}
+/* Phones: one scrolling column. */
+@media (max-width: 800px) and (orientation: landscape), (max-width: 600px) {
   .player { height: auto; }
   .player-body { flex-direction: column; }
   .side { width: 100%; border-right: none; border-bottom: 1px solid var(--border); }
@@ -212,7 +221,8 @@ details > summary { cursor: pointer; color: var(--accent); }
 /* Link menu and edge delete button */
 .junction { position: relative; }
 .link-menu {
-  position: absolute; top: calc(100% + 4px); left: 50%; transform: translateX(-50%); z-index: 10;
+  position: absolute; top: calc(100% + 4px); left: 50%; z-index: 10;
+  transform: translateX(-50%) scale(var(--menu-scale, 1)); transform-origin: top center;
   display: grid; min-width: 170px; background: var(--panel); border: 1px solid var(--border);
   border-radius: 8px; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.15); padding: 0.25rem;
 }

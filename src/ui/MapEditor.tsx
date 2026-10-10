@@ -17,6 +17,7 @@ import {
   getNodesBounds,
   getViewportForBounds,
   useReactFlow,
+  useStore,
   type Connection,
   type Edge,
   type EdgeChange,
@@ -30,7 +31,7 @@ import { toPng } from 'html-to-image';
 import { FAILED_COLOR, INDUCTIVE_DASH, isFailed, optionLabel, typeBadge, verdictLabel } from '../model/evaluationStyle';
 import { vocab } from '../model/vocab';
 import { claimStatuses, STATUS_LABEL, STATUS_TITLE, type ClaimStatus } from '../model/dialectic';
-import { QUALITIES, type LessonKind, type ArgumentMap, type Evaluation, type InferenceQuality, type InferenceType, type MapRelation, type RelationType } from '../model/types';
+import { QUALITIES, type LessonKind, type ArgumentMap, type Evaluation, type InferenceQuality, type InferenceType, type MapNode, type MapRelation, type RelationType } from '../model/types';
 import { autoLayout, CLAIM_SIZE, JUNCTION_SIZE } from '../model/layout';
 import * as ops from '../model/ops';
 import { download } from './exportMap';
@@ -212,8 +213,15 @@ function JunctionNode({ id, data, selected }: NodeProps<JunctionNodeT>) {
     fn();
   };
   const ev = data.evaluation;
+  // Menus open inside the zoomed canvas; scale them back up so they stay readable and
+  // tappable when the map is zoomed out to fit a small screen.
+  const zoom = useStore((s) => s.transform[2]);
+  const menuScale = Math.min(2.5, Math.max(1, 1 / zoom));
   return (
-    <div className={`junction junction-${isFailed(data.evaluation) ? 'failed' : data.type}`}>
+    <div
+      className={`junction junction-${isFailed(data.evaluation) ? 'failed' : data.type}`}
+      style={{ '--menu-scale': menuScale } as React.CSSProperties}
+    >
       <SideHandles />
       <button
         className="nodrag"
@@ -436,17 +444,68 @@ function buildNodes(map: ArgumentMap, props: MapEditorProps, prev: Node[]): Node
   ];
 }
 
-/** Where a link's label sits: its saved position, or midway between its premises and its target. */
+type Box = { x: number; y: number; w: number; h: number };
+const overlaps = (a: Box, b: Box, margin: number) =>
+  !(a.x + a.w + margin <= b.x || b.x + b.w + margin <= a.x || a.y + a.h + margin <= b.y || b.y + b.h + margin <= a.y);
+
+/** A claim box's height, estimated from its text (it grows as the text wraps). */
+const claimHeight = (text: string) => Math.max(CLAIM_SIZE.height, 52 + Math.ceil(text.length / 30) * 19);
+const claimBox = (n: { position: { x: number; y: number }; text: string }): Box => ({ ...n.position, w: CLAIM_SIZE.width, h: claimHeight(n.text) });
+/** A link label's box (its evaluation badge, if any, sits underneath). */
+const labelBox = (p: { x: number; y: number }, r: MapRelation): Box => ({ ...p, w: 112, h: r.evaluation?.type ? 54 : 30 });
+
+/** The nearest spot to `start` where a box of the given size overlaps none of `boxes`. */
+function nearestFree(start: { x: number; y: number }, size: { w: number; h: number }, boxes: Box[], margin = 8) {
+  const fits = (p: { x: number; y: number }) => boxes.every((b) => !overlaps({ ...p, ...size }, b, margin));
+  for (let ring = 0; ring <= 40; ring++) {
+    const radius = ring * 12;
+    const steps = Math.max(1, ring * 6);
+    for (let k = 0; k < steps; k++) {
+      const a = (2 * Math.PI * k) / steps;
+      const p = { x: start.x + radius * Math.cos(a), y: start.y + radius * Math.sin(a) };
+      if (fits(p)) return p;
+    }
+  }
+  return start;
+}
+
+/**
+ * Where each link label without a saved position sits: midway between its premises and its
+ * target, moved to the nearest spot clear of claims and other labels.
+ */
+const labelCache = new WeakMap<ArgumentMap, Record<string, { x: number; y: number }>>();
+function labelLayout(map: ArgumentMap): Record<string, { x: number; y: number }> {
+  const cached = labelCache.get(map);
+  if (cached) return cached;
+  const boxes: Box[] = [...map.nodes.map(claimBox), ...map.relations.filter((r) => r.position).map((r) => labelBox(r.position!, r))];
+  const out: Record<string, { x: number; y: number }> = {};
+  for (const r of map.relations) {
+    if (r.position) continue;
+    const premises = map.nodes.filter((n) => r.from.includes(n.id));
+    const target = map.nodes.find((n) => n.id === r.to);
+    if (!premises.length || !target) {
+      out[r.id] = { x: 0, y: 0 };
+      continue;
+    }
+    // Halfway between the premises' average centre and the target's centre.
+    const centre = (n: MapNode) => {
+      const b = claimBox(n);
+      return { x: b.x + b.w / 2, y: b.y + b.h / 2 };
+    };
+    const avg = (key: 'x' | 'y') => premises.reduce((sum, n) => sum + centre(n)[key], 0) / premises.length;
+    const { w, h } = labelBox({ x: 0, y: 0 }, r);
+    const size = { w, h };
+    const mid = { x: (avg('x') + centre(target).x) / 2 - size.w / 2, y: (avg('y') + centre(target).y) / 2 - size.h / 2 };
+    out[r.id] = nearestFree(mid, size, boxes);
+    boxes.push(labelBox(out[r.id], r));
+  }
+  labelCache.set(map, out);
+  return out;
+}
+
+/** Where a link's label sits: its saved position, or a clear spot between its premises and its target. */
 function junctionPosition(map: ArgumentMap, r: MapRelation): { x: number; y: number } {
-  if (r.position) return r.position;
-  const premises = map.nodes.filter((n) => r.from.includes(n.id));
-  const target = map.nodes.find((n) => n.id === r.to);
-  if (!premises.length || !target) return { x: 0, y: 0 };
-  // Halfway between the premises' average position and the target.
-  const avg = (key: 'x' | 'y') => premises.reduce((sum, n) => sum + n.position[key], 0) / premises.length;
-  const cx = (avg('x') + target.position.x) / 2 + CLAIM_SIZE.width / 2;
-  const cy = (avg('y') + target.position.y) / 2 + CLAIM_SIZE.height / 2;
-  return { x: cx - JUNCTION_SIZE.width / 2, y: cy - JUNCTION_SIZE.height / 2 };
+  return r.position ?? labelLayout(map)[r.id] ?? { x: 0, y: 0 };
 }
 
 function buildEdges(map: ArgumentMap, prev: Edge[], readOnly: boolean, kind: LessonKind): LinkEdgeT[] {
@@ -514,19 +573,21 @@ function freeSpotInView(
   map: ArgumentMap,
   nodeId: string,
   view: { x: number; y: number; end: { x: number; y: number } },
+  avoid: Box[] = [],
 ): { x: number; y: number } | null {
   const node = map.nodes.find((n) => n.id === nodeId);
   if (!node) return null;
   const margin = 16;
-  const { width: w, height: h } = CLAIM_SIZE;
+  const w = CLAIM_SIZE.width;
+  const h = claimHeight(node.text);
   const inView = (p: { x: number; y: number }) =>
     p.x >= view.x && p.y >= view.y && p.x + w <= view.end.x && p.y + h <= view.end.y;
   const boxes = [
-    ...map.nodes.filter((n) => n.id !== nodeId).map((n) => ({ ...n.position, w, h })),
-    ...map.relations.map((r) => ({ ...junctionPosition(map, r), w: JUNCTION_SIZE.width, h: JUNCTION_SIZE.height })),
+    ...map.nodes.filter((n) => n.id !== nodeId).map(claimBox),
+    ...map.relations.map((r) => labelBox(junctionPosition(map, r), r)),
+    ...avoid,
   ];
-  const free = (p: { x: number; y: number }) =>
-    boxes.every((b) => p.x + w + margin <= b.x || b.x + b.w + margin <= p.x || p.y + h + margin <= b.y || b.y + b.h + margin <= p.y);
+  const free = (p: { x: number; y: number }) => boxes.every((b) => !overlaps({ ...p, w, h }, b, margin));
   if (inView(node.position) && free(node.position)) return null;
   // Scan the visible area row by row for the first free spot.
   for (let y = view.y; y + h <= view.end.y; y += h / 2) {
@@ -581,7 +642,15 @@ function Editor(props: MapEditorProps) {
       ...flow.screenToFlowPosition({ x: rect.left, y: toolbarBottom + 8 }),
       end: flow.screenToFlowPosition({ x: rect.right, y: rect.bottom }),
     };
-    const spot = freeSpotInView(map, added[0].id, view);
+    // Keep clear of the zoom controls in the corner.
+    const controls = wrapper.current?.querySelector('.react-flow__controls')?.getBoundingClientRect();
+    const avoid: Box[] = [];
+    if (controls) {
+      const a = flow.screenToFlowPosition({ x: controls.left, y: controls.top });
+      const b = flow.screenToFlowPosition({ x: controls.right, y: controls.bottom });
+      avoid.push({ x: a.x, y: a.y, w: b.x - a.x, h: b.y - a.y });
+    }
+    const spot = freeSpotInView(map, added[0].id, view, avoid);
     if (spot) commit(ops.setPositions(map, { [added[0].id]: spot }));
   }, [map]);
 
