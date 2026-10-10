@@ -3,9 +3,29 @@ import { badgeText, INDUCTIVE_DASH, QUALITY_SYMBOL, TYPE_SYMBOL } from '../model
 import { vocab } from '../model/vocab';
 import type { Diagram, DiagramLink } from './model';
 
-/** Colours match the interactive map. */
-const COLOR = { support: '#2f7d32', objection: '#c62828', explanation: '#5b3fa8' } as const;
-const PILL_FILL = { support: '#e8f3e8', objection: '#fbe9e9', explanation: '#efeafa' } as const;
+/** Colours match the interactive map. Failed inferences (invalid or weak) are drawn in neutral grey. */
+const COLOR = { support: '#2f7d32', objection: '#c62828', explanation: '#5b3fa8', failed: '#646a72' } as const;
+const PILL_FILL = { support: '#e8f3e8', objection: '#fbe9e9', explanation: '#efeafa', failed: '#eeeff1' } as const;
+
+const failed = (l: DiagramLink) => l.evaluation?.quality === 'invalid' || l.evaluation?.quality === 'weak';
+
+/** Once a link's quality is judged, its label is the verdict ("✓ VALID", "✗ WEAK"); otherwise "SUPPORTS" etc. */
+const pillText = (d: Diagram, l: DiagramLink) =>
+  (l.evaluation?.quality ? `${QUALITY_SYMBOL[l.evaluation.quality]} ${l.evaluation.quality}` : linkLabel(d, l)).toUpperCase();
+
+/** The badge under the label: the type, plus the quality only while it isn't the label. */
+const badgeFor = (l: DiagramLink) =>
+  !l.evaluation?.type ? '' : l.evaluation.quality ? `${TYPE_SYMBOL[l.evaluation.type]} ${l.evaluation.type}` : badgeText(l.evaluation);
+
+/** The point halfway along a path through dagre's edge points (matching pathThrough's curve). */
+function midpoint(points: { x: number; y: number }[]): { x: number; y: number } {
+  if (points.length === 3) {
+    const [a, b, c] = points;
+    return { x: 0.25 * a.x + 0.5 * b.x + 0.25 * c.x, y: 0.25 * a.y + 0.5 * b.y + 0.25 * c.y };
+  }
+  const i = Math.floor((points.length - 1) / 2);
+  return { x: (points[i].x + points[i + 1].x) / 2, y: (points[i].y + points[i + 1].y) / 2 };
+}
 const FONT = "system-ui, -apple-system, 'Segoe UI', Roboto, 'DejaVu Sans', 'Liberation Sans', sans-serif";
 
 const CLAIM_WIDTH = 250;
@@ -72,8 +92,8 @@ export function renderDiagramSvg(d: Diagram): string {
     g.setNode(c.id, { width: CLAIM_WIDTH, height });
   }
   d.links.forEach((l, i) => {
-    const label = linkLabel(d, l).toUpperCase();
-    const badge = l.evaluation ? badgeText(l.evaluation) : '';
+    const label = pillText(d, l);
+    const badge = badgeFor(l);
     const width = Math.max(label.length * 8 + 26, badgeWidth(badge) + 4);
     g.setNode(`link${i}`, { width, height: badge ? 46 : 26 });
     for (const f of l.from) g.setEdge(f, `link${i}`);
@@ -82,7 +102,7 @@ export function renderDiagramSvg(d: Diagram): string {
   dagre.layout(g);
 
   // Filled arrowheads for most links; open ones for inductive links.
-  const markers = (['support', 'objection', 'explanation'] as const)
+  const markers = (['support', 'objection', 'explanation', 'failed'] as const)
     .map(
       (t) =>
         `<marker id="arrow-${t}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="${COLOR[t]}"/></marker>` +
@@ -94,21 +114,32 @@ export function renderDiagramSvg(d: Diagram): string {
   const linkEls = d.links.map((l, i) => {
     const id = `link${i}`;
     const n = g.node(id);
-    const color = COLOR[l.type];
+    const fail = failed(l);
+    const tone = fail ? 'failed' : l.type;
+    const color = COLOR[tone];
     // Inductive links are dashed with an open arrowhead; everything else is solid with a filled one.
     const inductive = l.evaluation?.type === 'inductive';
     const dash = inductive ? ` stroke-dasharray="${INDUCTIVE_DASH}"` : '';
-    const marker = `url(#arrow-${l.type}${inductive ? '-open' : ''})`;
+    const marker = `url(#arrow-${tone}${inductive ? '-open' : ''})`;
+    const outPoints = g.edge(id, l.to).points;
     const lines = [
       ...l.from.map((f) => `<path d="${pathThrough(g.edge(f, id).points)}" fill="none" stroke="${color}" stroke-width="2.5"${dash}/>`),
-      `<path d="${pathThrough(g.edge(id, l.to).points)}" fill="none" stroke="${color}" stroke-width="2.5"${dash} marker-end="${marker}"/>`,
+      `<path d="${pathThrough(outPoints)}" fill="none" stroke="${color}" stroke-width="2.5"${dash} marker-end="${marker}"/>`,
     ];
-    const label = linkLabel(d, l).toUpperCase();
-    const badge = l.evaluation ? badgeText(l.evaluation) : '';
+    if (fail) {
+      // A failed inference "doesn't get through": a circled ✗ breaks the line into the conclusion.
+      const m = midpoint(outPoints);
+      lines.push(
+        `<circle cx="${m.x}" cy="${m.y}" r="10" fill="#fff" stroke="${color}" stroke-width="2"/>` +
+          `<text x="${m.x}" y="${m.y + 5}" text-anchor="middle" font-size="14" font-weight="700" fill="${color}">✗</text>`,
+      );
+    }
+    const label = pillText(d, l);
+    const badge = badgeFor(l);
     const pillW = label.length * 8 + 26;
     const pillY = n.y - n.height / 2;
     const pill =
-      `<rect x="${n.x - pillW / 2}" y="${pillY}" width="${pillW}" height="26" rx="13" fill="${PILL_FILL[l.type]}" stroke="${color}" stroke-width="2"/>` +
+      `<rect x="${n.x - pillW / 2}" y="${pillY}" width="${pillW}" height="26" rx="13" fill="${PILL_FILL[tone]}" stroke="${color}" stroke-width="2"/>` +
       `<text x="${n.x}" y="${pillY + 17.5}" text-anchor="middle" font-size="12" font-weight="700" letter-spacing="0.5" fill="${color}">${esc(label)}</text>`;
     // Badge shape echoes the type: square corners for deductive, rounded for inductive.
     const bw = badgeWidth(badge);
@@ -173,8 +204,16 @@ function legend(y: number): { svg: string; width: number } {
   };
   sample(false, false, `${TYPE_SYMBOL.deductive} deductive`);
   sample(true, true, `${TYPE_SYMBOL.inductive} inductive`);
-  text(`${QUALITY_SYMBOL.valid} valid / strong`);
-  text(`${QUALITY_SYMBOL.invalid} invalid / weak`);
+  // A grey line broken by a circled ✗: the inference fails (invalid or weak).
+  const grey = COLOR.failed;
+  items.push(
+    `<line x1="${x}" y1="${y + 14}" x2="${x + 38}" y2="${y + 14}" stroke="${grey}" stroke-width="2.5"/>` +
+      `<path d="M${x + 38},${y + 9} L${x + 48},${y + 14} L${x + 38},${y + 19} z" fill="${grey}"/>` +
+      `<circle cx="${x + 19}" cy="${y + 14}" r="8" fill="#fff" stroke="${grey}" stroke-width="1.8"/>` +
+      `<text x="${x + 19}" y="${y + 18}" text-anchor="middle" font-size="11" font-weight="700" fill="${grey}">✗</text>`,
+  );
+  x += 56;
+  text(`fails (${QUALITY_SYMBOL.invalid} invalid / ${QUALITY_SYMBOL.weak} weak)`);
   return { svg: `<g class="argmap-legend" aria-hidden="true">${items.join('')}</g>`, width: x };
 }
 
