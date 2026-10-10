@@ -1,4 +1,4 @@
-import { useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { isBank, type Claim, type Lesson, type Span } from '../model/types';
 
 interface Props {
@@ -61,6 +61,18 @@ function HighlightSegment({ lesson, segment, usedSpans, readOnly, addLabel, onAd
   const text = lesson.steps[segment].passage;
   const ref = useRef<HTMLDivElement>(null);
   const [pending, setPending] = useState<Span | null>(null);
+
+  // Selecting text in another part of the passage replaces this part's pending selection.
+  // (A collapsed selection doesn't count: tapping the Add button can collapse it on touch screens.)
+  useEffect(() => {
+    const onChange = () => {
+      const sel = window.getSelection();
+      const root = ref.current;
+      if (sel && !sel.isCollapsed && root && !root.contains(sel.anchorNode)) setPending(null);
+    };
+    document.addEventListener('selectionchange', onChange);
+    return () => document.removeEventListener('selectionchange', onChange);
+  }, []);
 
   const capture = () => {
     const sel = window.getSelection();

@@ -27,7 +27,15 @@ export function ClaimBank({ lesson, stepIndex, used, readOnly, onAdd }: Props) {
           return (
             <li key={c.id}>
               <span>{c.passageText}</span>
-              <button disabled={readOnly || inMap} onClick={() => onAdd(c)}>
+              <button
+                disabled={readOnly || inMap}
+                onClick={(e) => {
+                  // The button disables itself; keep keyboard focus in the bank rather than losing it.
+                  const list = e.currentTarget.closest('ul');
+                  onAdd(c);
+                  requestAnimationFrame(() => list?.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus());
+                }}
+              >
                 {inMap ? 'Added' : 'Add'}
               </button>
             </li>

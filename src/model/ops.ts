@@ -49,7 +49,8 @@ export const toggleConclusion = (map: ArgumentMap, nodeId: string): ArgumentMap 
 /** Adds a single-premise relation. Ignores self-links and exact duplicates. */
 export function addRelation(map: ArgumentMap, type: RelationType, from: string[], to: string): ArgumentMap {
   from = [...new Set(from)];
-  if (from.length === 0 || from.includes(to)) return map;
+  const exists = (id: string) => map.nodes.some((n) => n.id === id);
+  if (from.length === 0 || from.includes(to) || !exists(to) || !from.every(exists)) return map;
   if (map.relations.some((r) => sameLink(r, { from, to }))) return map;
   return { ...map, relations: [...map.relations, { id: newId('r'), type, from, to }] };
 }

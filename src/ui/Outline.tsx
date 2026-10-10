@@ -58,9 +58,13 @@ export function Outline({ map, onChange, nameFor, editFor, locked, evaluateFor, 
   const [type, setType] = useState<RelationType>(explanation ? 'explanation' : 'support');
   const statuses = claimStatuses(map.relations);
 
+  // Choices for claims since removed from the map don't count.
+  const onMap = (id: string) => map.nodes.some((n) => n.id === id);
+  const sources = premises.filter(onMap);
+  const targetId = onMap(target) ? target : '';
   const add = () => {
-    if (!premises.length || !target) return;
-    onChange(ops.addRelation(map, type, premises.filter((p) => p !== target), target));
+    if (!sources.length || !targetId) return;
+    onChange(ops.addRelation(map, type, sources.filter((p) => p !== targetId), targetId));
     setPremises([]);
   };
 
@@ -140,7 +144,7 @@ export function Outline({ map, onChange, nameFor, editFor, locked, evaluateFor, 
               <label key={n.id} className="check">
                 <input
                   type="checkbox"
-                  checked={premises.includes(n.id)}
+                  checked={sources.includes(n.id)}
                   onChange={(e) => setPremises(e.target.checked ? [...premises, n.id] : premises.filter((p) => p !== n.id))}
                 />{' '}
                 {nameFor(n.id)}
@@ -162,7 +166,7 @@ export function Outline({ map, onChange, nameFor, editFor, locked, evaluateFor, 
           </label>{' '}
           <label>
             Target{' '}
-            <select value={target} onChange={(e) => setTarget(e.target.value)}>
+            <select value={targetId} onChange={(e) => setTarget(e.target.value)}>
               <option value="">Choose a claim…</option>
               {map.nodes.map((n) => (
                 <option key={n.id} value={n.id}>
@@ -171,7 +175,7 @@ export function Outline({ map, onChange, nameFor, editFor, locked, evaluateFor, 
               ))}
             </select>
           </label>{' '}
-          <button onClick={add} disabled={!premises.length || !target}>
+          <button onClick={add} disabled={!sources.length || !targetId}>
             Add link
           </button>
         </fieldset>

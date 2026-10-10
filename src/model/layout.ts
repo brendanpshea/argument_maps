@@ -9,10 +9,12 @@ export const JUNCTION_SIZE = { width: 96, height: 28 };
  * premises/objections below. Returns a new map with updated positions.
  */
 export function autoLayout(map: ArgumentMap): ArgumentMap {
+  // Claims with no links yet go in a grid below the rest; dagre would put them all in one long row.
+  const linked = new Set(map.relations.flatMap((r) => [...r.from, r.to]));
   const g = new dagre.graphlib.Graph();
   g.setGraph({ rankdir: 'BT', nodesep: 40, ranksep: 50 });
   g.setDefaultEdgeLabel(() => ({}));
-  for (const n of map.nodes) g.setNode(n.id, { ...CLAIM_SIZE });
+  for (const n of map.nodes) if (linked.has(n.id)) g.setNode(n.id, { ...CLAIM_SIZE });
   for (const r of map.relations) {
     g.setNode(r.id, { ...JUNCTION_SIZE });
     for (const f of r.from) g.setEdge(f, r.id);
@@ -23,9 +25,16 @@ export function autoLayout(map: ArgumentMap): ArgumentMap {
     const p = g.node(id);
     return { x: p.x - size.width / 2, y: p.y - size.height / 2 };
   };
+  const bottom = Math.max(0, ...map.nodes.filter((n) => linked.has(n.id)).map((n) => at(n.id, CLAIM_SIZE).y + CLAIM_SIZE.height));
+  const top = linked.size ? bottom + 80 : 0;
+  let k = 0;
+  const gridSpot = () => {
+    const i = k++;
+    return { x: (i % 3) * (CLAIM_SIZE.width + 40), y: top + Math.floor(i / 3) * (CLAIM_SIZE.height + 60) };
+  };
   return {
     ...map,
-    nodes: map.nodes.map((n) => ({ ...n, position: at(n.id, CLAIM_SIZE) })),
+    nodes: map.nodes.map((n) => ({ ...n, position: linked.has(n.id) ? at(n.id, CLAIM_SIZE) : gridSpot() })),
     relations: map.relations.map((r) => ({ ...r, position: at(r.id, JUNCTION_SIZE) })),
   };
 }
