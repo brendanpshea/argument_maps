@@ -296,13 +296,21 @@ function legend(y: number): { svg: string; width: number } {
 
 /** A plain-text description of the diagram for screen readers. */
 export function describe(d: Diagram): string {
-  const text = (id: string) => d.claims.find((c) => c.id === id)?.text ?? id;
+  // Claim text without a final full stop, so sentences don't end "..".
+  const bare = (id: string) => (d.claims.find((c) => c.id === id)?.text ?? id).replace(/[.\s]+$/, '');
+  const text = (id: string) => (d.claims.find((c) => c.id === id)?.tag === 'unstated' ? `${bare(id)} (unstated)` : bare(id));
   const V = vocab(d.kind);
+  const plural: Record<string, string> = { supports: 'support', explains: 'explain', 'objects to': 'object to', rebuts: 'rebut' };
   const parts = d.conclusion ? [`${V.Conclusion}: ${text(d.conclusion)}.`] : [];
   for (const l of d.links) {
     const judged = l.evaluation?.type ? ` (${[l.evaluation.type, l.evaluation.quality].filter(Boolean).join(', ')})` : '';
-    parts.push(`${l.from.map(text).join(' and ')} ${linkLabel(d, l)} ${text(l.to)}${judged}.`);
+    const label = linkLabel(d, l);
+    const sentence =
+      l.from.length > 1
+        ? `Together, ${l.from.map(text).join(' and ')} ${plural[label] ?? label} ${text(l.to)}`
+        : `${text(l.from[0])} ${label} ${text(l.to)}`;
+    parts.push(`${sentence}${judged}.`);
   }
-  for (const [id, status] of claimStatuses(d.links)) parts.push(`${text(id)}: ${status}.`);
+  for (const [id, status] of claimStatuses(d.links)) parts.push(`${bare(id)}: ${status}.`);
   return parts.join(' ');
 }

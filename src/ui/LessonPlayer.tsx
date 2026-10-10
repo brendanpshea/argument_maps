@@ -6,6 +6,7 @@ import * as ops from '../model/ops';
 import { stableShuffle } from '../model/shuffle';
 import { emptyMap, isBank, type ArgumentMap, type ClaimSource, type Lesson, type LessonKind, type Span } from '../model/types';
 import { vocab } from '../model/vocab';
+import { describeChanges } from '../model/describe';
 import type { LessonProgress, ProgressStore } from '../storage/progress';
 import { downloadMapJson, readMapFile } from './exportMap';
 import { Feedback } from './Feedback';
@@ -51,8 +52,9 @@ const contentKey = (m: ArgumentMap) =>
     m.relations.map((r) => [r.id, r.type, r.from, r.to, r.evaluation]),
   ]);
 
+const OUTLINE_MODE_KEY = 'argument-maps:outline-mode';
+
 const fresh = (): LessonProgress => ({ stepIndex: 0, maps: [emptyMap()], scores: [null], completed: false });
-const truncate = (s: string, n = 40) => (s.length > n ? `${s.slice(0, n - 1).trimEnd()}…` : s);
 
 export function LessonPlayer({ lesson, store, authorMode, onExit }: Props) {
   const [progress, setProgress] = useState<LessonProgress>(() => {
@@ -66,6 +68,14 @@ export function LessonPlayer({ lesson, store, authorMode, onExit }: Props) {
   /** Free-rewording steps: the student confirms they compared their wording with the model's. */
   const [compared, setCompared] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
+  /** Outline mode: the map is built in a list instead of on the canvas (remembered in this browser). */
+  const [outlineMode, setOutlineMode] = useState(() => {
+    try {
+      return !!localStorage.getItem(OUTLINE_MODE_KEY);
+    } catch {
+      return false;
+    }
+  });
 
   const { stepIndex } = progress;
   const step = lesson.steps[stepIndex];
@@ -104,9 +114,20 @@ export function LessonPlayer({ lesson, store, authorMode, onExit }: Props) {
     const claim = claimId ? lesson.claims[claimId] : undefined;
     return lesson.claimMode === 'marked' && claim && !isBank(claim.source) ? `(${claim.number})` : undefined;
   };
-  const nameFor = (id: string) => {
-    const n = nodeById(map, id);
-    return [numberFor(map, id), `“${truncate(n?.text ?? '')}”`].filter(Boolean).join(' ');
+  const nameIn = (m: ArgumentMap, mapped: Record<string, string>) => (id: string) => {
+    const n = nodeById(m, id);
+    const claim = mapped[id] ? lesson.claims[mapped[id]] : undefined;
+    const number = lesson.claimMode === 'marked' && claim && !isBank(claim.source) ? `(${claim.number}) ` : '';
+    return `${number}“${n?.text ?? ''}”`;
+  };
+  const nameFor = nameIn(map, mapping);
+
+  // One polite live region, always on the page, says what just happened: what changed on
+  // the map, the result of a check, the step. (Clearing it first lets the same words repeat.)
+  const [spoken, setSpoken] = useState('');
+  const announce = (text: string) => {
+    setSpoken('');
+    setTimeout(() => setSpoken(text), 60);
   };
 
   const setMap = (next: ArgumentMap) => {
@@ -114,6 +135,11 @@ export function LessonPlayer({ lesson, store, authorMode, onExit }: Props) {
     if (contentKey(next) !== contentKey(map)) {
       setResult(null);
       setCompared(false);
+      const changes =
+        task === 'conclusion' && next.conclusion
+          ? [`Your answer: ${nameIn(next, matchNodes(lesson, next).mapping)(next.conclusion)}.`]
+          : describeChanges(map, next, { prev: nameFor, next: nameIn(next, matchNodes(lesson, next).mapping) }, vocab(lesson.kind).conclusion);
+      if (changes.length) announce(changes.slice(0, 4).join(' '));
     }
     setProgress((p) => ({ ...p, maps: p.maps.map((m, i) => (i === p.stepIndex ? next : m)) }));
   };
@@ -123,6 +149,19 @@ export function LessonPlayer({ lesson, store, authorMode, onExit }: Props) {
   /** Steps unlock one at a time: a student moves on only after getting the current step fully right. */
   const unlocked = (index: number) => authorMode || index < progress.maps.length;
   const canAdvance = !isLast && (passed || unlocked(stepIndex + 1));
+
+  // After moving to another step, focus its instructions and say which step this is.
+  const instructions = useRef<HTMLParagraphElement>(null);
+  const firstRender = useRef(true);
+  useEffect(() => {
+    document.title = `${lesson.title}: step ${stepIndex + 1} of ${lesson.steps.length} | Argument Maps`;
+    if (firstRender.current) {
+      firstRender.current = false;
+      return;
+    }
+    instructions.current?.focus();
+    announce(`Step ${stepIndex + 1} of ${lesson.steps.length}: ${step.title ?? ''}`);
+  }, [stepIndex]);
 
   const goTo = (index: number) => {
     setResult(null);
@@ -165,6 +204,12 @@ export function LessonPlayer({ lesson, store, authorMode, onExit }: Props) {
   const check = () => {
     const r = gradeStep(lesson, stepIndex, map);
     setResult(r);
+    const notes = r.items.filter((i) => i.status !== 'correct').length;
+    announce(
+      r.earned === r.possible && !freeReword
+        ? `Correct. ${isLast ? 'Lesson complete.' : 'Step complete: you can go on to the next step.'}`
+        : `${r.possible ? Math.round((r.earned / r.possible) * 100) : 0}%: ${r.earned} of ${r.possible} points. ${notes} ${notes === 1 ? 'note' : 'notes'} below.`,
+    );
     // A free-rewording step counts once the student confirms the comparison.
     if (!(task === 'reword' && lesson.rewording === 'free')) recordScore(r.possible ? r.earned / r.possible : 0);
   };
@@ -172,13 +217,16 @@ export function LessonPlayer({ lesson, store, authorMode, onExit }: Props) {
   const importMap = async (file: File) => {
     if (task !== 'structure') {
       setMessage('Maps can only be loaded on a mapping step: on this step, the structure of your map is fixed.');
+      announce('Maps can only be loaded on a mapping step.');
       return;
     }
     try {
       setMap(await readMapFile(file, lesson.id));
       setMessage('Map loaded.');
+      announce('Map loaded.');
     } catch (e) {
       setMessage((e as Error).message);
+      announce((e as Error).message);
     }
   };
 
@@ -203,13 +251,34 @@ export function LessonPlayer({ lesson, store, authorMode, onExit }: Props) {
 
   return (
     <div className="player">
+      <div className="visually-hidden" role="status" aria-live="polite">
+        {spoken}
+      </div>
       <header className="player-header">
         {onExit && (
           <button className="link-button" onClick={onExit}>
             ← All lessons
           </button>
         )}
-        <h1>{lesson.title}</h1>
+        <h1 tabIndex={-1} id="lesson-title">
+          {lesson.title}
+        </h1>
+        <button
+          className="outline-toggle"
+          aria-pressed={outlineMode}
+          title="Work in a list of claims and links instead of the drag-and-drop map (for keyboards and screen readers)"
+          onClick={() => {
+            const next = !outlineMode;
+            setOutlineMode(next);
+            try {
+              localStorage.setItem(OUTLINE_MODE_KEY, next ? '1' : '');
+            } catch {
+              // Not remembered (storage blocked), but it still works for now.
+            }
+          }}
+        >
+          Outline mode
+        </button>
         {lesson.steps.length > 1 && (
           <nav className="steps" aria-label="Steps">
             {lesson.steps.map((s, i) => (
@@ -222,9 +291,17 @@ export function LessonPlayer({ lesson, store, authorMode, onExit }: Props) {
               >
                 {i + 1}. {s.title ?? `Step ${i + 1}`}
                 {progress.scores[i] === 1 ? (
-                  <span className="step-score" aria-label="correct">✓</span>
+                  <span className="step-score">
+                    <span aria-hidden="true">✓</span>
+                    <span className="visually-hidden"> (correct)</span>
+                  </span>
                 ) : (
-                  progress.scores[i] != null && <span className="step-score partial">{Math.round(progress.scores[i]! * 100)}%</span>
+                  progress.scores[i] != null && (
+                    <span className="step-score partial">
+                      <span className="visually-hidden"> (score </span>
+                      {Math.round(progress.scores[i]! * 100)}%<span className="visually-hidden">)</span>
+                    </span>
+                  )
                 )}
               </button>
             ))}
@@ -232,9 +309,11 @@ export function LessonPlayer({ lesson, store, authorMode, onExit }: Props) {
         )}
       </header>
 
-      <div className="player-body">
-        <aside className="side">
-          <p className="instructions">{step.instructions}</p>
+      <main className="player-body">
+        <section className="side" aria-label="Lesson">
+          <p className="instructions" ref={instructions} tabIndex={-1}>
+            {step.instructions}
+          </p>
           <Passage
             lesson={lesson}
             stepIndex={stepIndex}
@@ -287,14 +366,18 @@ export function LessonPlayer({ lesson, store, authorMode, onExit }: Props) {
           {passed && !isLast && <p className="done">Step complete. Continue to the next step when you're ready.</p>}
           {passed && isLast && <p className="done">Lesson complete. Nice work!</p>}
 
-          {task !== 'conclusion' && (
+          {task !== 'conclusion' && !outlineMode && (
             <details className="outline-wrap">
-              <summary>Outline view (edit with the keyboard)</summary>
+              <summary>
+                <h2>Outline view</h2> (edit with the keyboard)
+              </summary>
               <Outline
                 kind={lesson.kind}
                 map={map}
                 onChange={setMap}
                 nameFor={nameFor}
+                labelFor={(id) => numberFor(map, id)}
+                tagFor={(id) => (nodeById(map, id) && isBank(nodeById(map, id)!.source) ? 'unstated' : undefined)}
                 editFor={(id) => editFor(map, id)}
                 locked={task === 'reword' || task === 'evaluate'}
                 evaluateFor={(id) => (evaluated.has(id) ? step.ask : null)}
@@ -325,14 +408,10 @@ export function LessonPlayer({ lesson, store, authorMode, onExit }: Props) {
             </div>
             <p className="hint">Your work is saved automatically in this browser.</p>
           </details>
-          {message && (
-            <p className="message" role="status">
-              {message}
-            </p>
-          )}
-        </aside>
+          {message && <p className="message">{message}</p>}
+        </section>
 
-        <main className="canvas">
+        <section className="canvas" aria-label={outlineMode ? 'Your map (outline)' : 'Your map (drag and drop)'}>
           {showModel && <div className="model-banner">Model answer (read-only)</div>}
           {task === 'conclusion' && !showModel ? (
             <ConclusionPick
@@ -340,6 +419,21 @@ export function LessonPlayer({ lesson, store, authorMode, onExit }: Props) {
               text={map.nodes.find((n) => n.id === map.conclusion)?.text}
               label={map.conclusion ? numberFor(map, map.conclusion) : undefined}
             />
+          ) : outlineMode && !showModel ? (
+            <div className="outline-main">
+              <h2>Your map</h2>
+              <Outline
+                kind={lesson.kind}
+                map={map}
+                onChange={setMap}
+                nameFor={nameFor}
+                labelFor={(id) => numberFor(map, id)}
+                tagFor={(id) => (nodeById(map, id) && isBank(nodeById(map, id)!.source) ? 'unstated' : undefined)}
+                editFor={(id) => editFor(map, id)}
+                locked={task === 'reword' || task === 'evaluate'}
+                evaluateFor={(id) => (evaluated.has(id) ? step.ask : null)}
+              />
+            </div>
           ) : (
           <MapEditor
             kind={lesson.kind}
@@ -362,8 +456,8 @@ export function LessonPlayer({ lesson, store, authorMode, onExit }: Props) {
             exportName={`${lesson.id}-step${stepIndex + 1}${showModel ? '-model' : ''}`}
           />
           )}
-        </main>
-      </div>
+        </section>
+      </main>
     </div>
   );
 }

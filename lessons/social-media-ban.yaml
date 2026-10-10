@@ -14,8 +14,9 @@ modelWording:
 steps:
   - title: The argument
     instructions: >
-      Select the text of each claim in the passage and press "Add claim".
-      You can reword a claim on the map (double-click it) so that it is clear
+      Select the text of each claim in the passage (or use “Choose the words”)
+      and press "Add claim". You can reword a claim (✎ on the map, or in the
+      outline) so that it is clear
       on its own, e.g. replace pronouns with what they refer to. Mark the main
       conclusion and connect the premises to it.
     passage: |

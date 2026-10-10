@@ -12,7 +12,7 @@ steps:
     title: Find the main conclusion
     instructions: >
       Read the passage. Which claim is the author ultimately trying to get you
-      to accept? Click it. (Not every numbered claim is part of the argument.)
+      to accept? Choose it in the passage. (Not every numbered claim is part of the argument.)
     passage: |
       {{x1|Zoos have existed since ancient Egypt.}} But {{c1|modern zoos should be phased out}}.
       {{c2|Large animals such as elephants suffer in captivity}}, as {{c3|they show stress
@@ -29,10 +29,11 @@ steps:
 
   - title: Map the argument
     instructions: >
-      Add the other claims that are part of the argument, then drag from one
-      claim to another to show which claims support or object to which. Drop a
-      premise onto an existing link (or use “Link with another premise…” in the
-      link's menu) when premises only work together.
+      Add the other claims that are part of the argument, then link them to
+      show which claims support or object to which: drag from one claim to
+      another on the map, or use “Add a link” in the outline. When premises
+      only work together, link them (drop a premise onto an existing link, or
+      use “Link with another premise…”).
     answer:
       conclusion: c1
       relations:

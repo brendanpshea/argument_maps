@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { findLesson, lessons } from './lesson/registry';
 import { localProgressStore } from './storage/progress';
 import { LessonList } from './ui/LessonList';
@@ -20,6 +20,18 @@ export function App() {
   const { path, params } = useHashRoute();
   const match = path.match(/^\/lesson\/([\w-]+)$/);
   const lesson = match ? findLesson(match[1]) : undefined;
+
+  // A new page: move focus to its heading, so screen readers start there instead of at
+  // whatever was focused before. (Not on first load, where the browser starts at the top.)
+  const first = useRef(true);
+  useEffect(() => {
+    if (!lesson) document.title = 'Argument Maps';
+    if (first.current) {
+      first.current = false;
+      return;
+    }
+    requestAnimationFrame(() => document.querySelector<HTMLElement>('#lesson-title, #page-title')?.focus());
+  }, [path]);
 
   if (lesson) {
     return (

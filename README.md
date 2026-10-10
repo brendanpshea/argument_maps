@@ -48,9 +48,24 @@ the browser, with no server.
 9. **Explanations** work the same way: students find the explanandum (what
    is being explained) and map what explains it with "explains" links.
 
-Students can also use an **outline view** to do everything with the keyboard,
+Students can also use an **outline view** to do everything with the keyboard
+(**Outline mode** makes it the main view, in place of the drag-and-drop map),
 **download** their map as a PNG or as a map file they can load again later,
 and pick up where they left off (work is saved in the browser).
+
+## Accessibility
+
+- Everything can be done with a keyboard or a screen reader: **Outline mode**
+  replaces the drag-and-drop map with a list of claims and links (every action
+  is a labelled control), and highlight-mode lessons have a "Choose the words"
+  picker in place of selecting text with a mouse.
+- A polite live region announces what changed (claims and links added or
+  removed, the conclusion, evaluations), check results, and step changes; focus
+  moves to something sensible after each action.
+- Link types, verdicts, and statuses are shown with words and shapes, not
+  colour alone. Slide diagrams have a text description.
+- Checked with axe-core (WCAG 2.2 AA) on the lesson list, every step type,
+  outline mode, highlight mode, and the slides.
 
 ## Slide decks for teaching
 
