@@ -181,7 +181,9 @@ label (or the outline view):
 1. **Type:** does the arguer present the premises as guaranteeing the
    conclusion (*deductive*) or as making it likely (*inductive*)?
 2. **Quality:** *valid* or *invalid* if deductive; *strong* or *weak* if
-   inductive.
+   inductive. Validity depends only on the link's premises. Inductive
+   strength depends on all the evidence on the map, so an objection that
+   stands unanswered can make an inductive link weak; key it that way.
 
 ```yaml
   - task: evaluate
@@ -319,8 +321,10 @@ Put the assumption a critic would attack into the bank as an unstated premise,
 linked with the evidence: for a generalization, that the sample is
 representative; for an analogy, that the cases are alike in the ways that
 matter; for an appeal to authority, that the source is a reliable expert.
-Objections then attack that premise, the inference is usually **strong** (or
-**valid**), and the map shows where the real disagreement is. See
+Objections then attack that premise, and the map shows where the real
+disagreement is. Because inductive strength depends on all the evidence, an
+inductive link whose premise is challenged by an unanswered objection is
+**weak**; once the objection is rebutted, it can be strong again. See
 `survey.yaml`.
 
 ### Challenged and answered claims

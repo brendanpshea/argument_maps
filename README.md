@@ -36,6 +36,9 @@ the browser, with no server.
    locked map.
 7. **Evaluate the reasoning**: for each support link, say whether it is
    deductive or inductive, then whether it is valid/invalid or strong/weak.
+   Inductive strength is judged on everything on the map, so an unanswered
+   objection can make an inductive link weak; validity depends only on the
+   premises.
 8. **Objections land on premises.** Unstated premises (from the claim bank)
    have a dashed border. A claim with an unanswered objection is marked
    **? challenged**, and **✓ answered** once every objection to it is rebutted.
