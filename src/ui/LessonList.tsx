@@ -9,8 +9,10 @@ interface Props {
 
 export function LessonList({ lessons, store, notFound }: Props) {
   return (
-    <div className="lesson-list">
-      <h1>Argument Maps</h1>
+    <main className="lesson-list">
+      <h1 tabIndex={-1} id="page-title">
+        Argument Maps
+      </h1>
       <p className="lede">Practice diagramming arguments (premises, conclusions, objections, and rebuttals) and explanations.</p>
       {notFound && <p className="message">That lesson could not be found.</p>}
       <p>
@@ -36,6 +38,6 @@ export function LessonList({ lessons, store, notFound }: Props) {
           );
         })}
       </ul>
-    </div>
+    </main>
   );
 }

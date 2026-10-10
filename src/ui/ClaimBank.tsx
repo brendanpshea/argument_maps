@@ -16,8 +16,8 @@ export function ClaimBank({ lesson, stepIndex, used, readOnly, onAdd }: Props) {
   if (!available.length) return null;
   const claims = stableShuffle(available, (c) => c.id, lesson.id);
   return (
-    <section className="claim-bank" aria-label="Claim bank">
-      <h3>Claim bank</h3>
+    <section className="claim-bank" aria-labelledby="claim-bank-heading">
+      <h2 id="claim-bank-heading">Claim bank</h2>
       <p className="hint">
         Arguments often rely on claims the author never states. Add any the argument needs. Not all of these are needed.
       </p>
@@ -29,11 +29,15 @@ export function ClaimBank({ lesson, stepIndex, used, readOnly, onAdd }: Props) {
               <span>{c.passageText}</span>
               <button
                 disabled={readOnly || inMap}
+                aria-label={inMap ? `Added: ${c.passageText}` : `Add to map: ${c.passageText}`}
                 onClick={(e) => {
-                  // The button disables itself; keep keyboard focus in the bank rather than losing it.
-                  const list = e.currentTarget.closest('ul');
+                  // The button disables itself; move keyboard focus to the next claim in the bank.
+                  const buttons = [...(e.currentTarget.closest('ul')?.querySelectorAll<HTMLButtonElement>('button') ?? [])];
+                  const here = buttons.indexOf(e.currentTarget);
                   onAdd(c);
-                  requestAnimationFrame(() => list?.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus());
+                  requestAnimationFrame(() =>
+                    [...buttons.slice(here + 1), ...buttons.slice(0, here)].find((b) => !b.disabled)?.focus(),
+                  );
                 }}
               >
                 {inMap ? 'Added' : 'Add'}

@@ -62,17 +62,34 @@ function HighlightSegment({ lesson, segment, usedSpans, readOnly, addLabel, onAd
   const ref = useRef<HTMLDivElement>(null);
   const [pending, setPending] = useState<Span | null>(null);
 
+  const [note, setNote] = useState('');
+  // Follow the selection however it's made (mouse, touch, keyboard, or a screen reader).
   // Selecting text in another part of the passage replaces this part's pending selection.
   // (A collapsed selection doesn't count: tapping the Add button can collapse it on touch screens.)
   useEffect(() => {
     const onChange = () => {
       const sel = window.getSelection();
       const root = ref.current;
-      if (sel && !sel.isCollapsed && root && !root.contains(sel.anchorNode)) setPending(null);
+      if (!sel || sel.isCollapsed || !root) return;
+      if (root.contains(sel.anchorNode) && root.contains(sel.focusNode)) capture();
+      else if (!root.contains(sel.anchorNode)) setPending(null);
     };
     document.addEventListener('selectionchange', onChange);
     return () => document.removeEventListener('selectionchange', onChange);
   }, []);
+
+  // A keyboard alternative to selecting text: choose the claim's first and last words.
+  const words = [...text.matchAll(/\S+/g)].map((m) => ({ start: m.index!, end: m.index! + m[0].length, text: m[0] }));
+  const [first, setFirst] = useState(-1);
+  const [last, setLast] = useState(-1);
+  const choose = (f: number, l: number) => {
+    setFirst(f);
+    setLast(l);
+    setNote('');
+    setPending(f >= 0 && l >= f ? { segment, start: words[f].start, end: words[l].end } : null);
+  };
+  const context = (i: number, dir: 1 | -1) =>
+    (dir === 1 ? words.slice(i, i + 5) : words.slice(Math.max(0, i - 4), i + 1)).map((w) => w.text).join(' ');
 
   const capture = () => {
     const sel = window.getSelection();
@@ -106,17 +123,50 @@ function HighlightSegment({ lesson, segment, usedSpans, readOnly, addLabel, onAd
         <div className="highlight-actions">
           <button
             className="primary"
-            disabled={!pending}
+            aria-disabled={!pending}
             onClick={() => {
-              if (!pending) return;
+              if (!pending) {
+                setNote('Select the words of a claim in the passage first, or choose them with “Choose the words”.');
+                return;
+              }
               onAddClaim(pending, text.slice(pending.start, pending.end).trim());
               window.getSelection()?.removeAllRanges();
               setPending(null);
+              setFirst(-1);
+              setLast(-1);
             }}
           >
             {addLabel ?? 'Add claim'}
           </button>
-          <span className="hint">{pending ? `“${text.slice(pending.start, pending.end).trim()}”` : 'Select the text of a claim in this passage.'}</span>
+          <span className="hint" aria-live="polite">
+            {note || (pending ? `Selected: “${text.slice(pending.start, pending.end).trim()}”` : 'Select the text of a claim in this passage.')}
+          </span>
+          <details className="word-picker">
+            <summary>Choose the words (keyboard)</summary>
+            <label>
+              First word{' '}
+              <select value={first} onChange={(e) => choose(Number(e.target.value), Math.max(Number(e.target.value), last))}>
+                <option value={-1}>Choose…</option>
+                {words.map((_, i) => (
+                  <option key={i} value={i}>
+                    {context(i, 1)}…
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Last word{' '}
+              <select value={last} disabled={first < 0} onChange={(e) => choose(first, Number(e.target.value))}>
+                {words.map((_, i) =>
+                  i < Math.max(first, 0) ? null : (
+                    <option key={i} value={i}>
+                      …{context(i, -1)}
+                    </option>
+                  ),
+                )}
+              </select>
+            </label>
+          </details>
         </div>
       )}
     </div>
@@ -126,14 +176,17 @@ function HighlightSegment({ lesson, segment, usedSpans, readOnly, addLabel, onAd
 export function Passage(props: Props) {
   const Segment = props.lesson.claimMode === 'marked' ? MarkedSegment : HighlightSegment;
   return (
-    <section className="passage" aria-label="Passage">
+    <section className="passage" aria-labelledby="passage-heading">
+      <h2 id="passage-heading" className="visually-hidden">
+        Passage
+      </h2>
       {props.lesson.steps.slice(0, props.stepIndex + 1).map((step, i) => {
         // Steps without new text (e.g. reword steps) add nothing to the passage.
         if (!step.passage) return null;
         const isNew = i === props.stepIndex && props.lesson.steps.slice(0, i).some((s) => s.passage);
         return (
           <div key={i} className={`passage-segment${isNew ? ' is-new' : ''}`}>
-            {isNew && <span className="new-tag">New in this step</span>}
+            {isNew && <h3 className="new-tag">New in this step</h3>}
             <Segment {...props} segment={i} />
           </div>
         );

@@ -13,7 +13,7 @@ steps:
     instructions: >
       This passage is an explanation. The explanandum is the fact or event
       being explained; the explanans is what explains it. Which claim is the
-      explanandum? Click it.
+      explanandum? Choose it in the passage.
     passage: |
       {{d1|Every October, thousands of tourists drive through New England to see the
       foliage.}} What they come for is the fact that {{e|maple leaves turn yellow, orange,
@@ -35,7 +35,7 @@ steps:
 
   - title: Map the explanation
     instructions: >
-      Add the claims that help explain the explanandum, then drag from each
+      Add the claims that help explain the explanandum, then link each
       one to what it explains. Some claims explain something only in
       combination with others; link those together.
     answer:

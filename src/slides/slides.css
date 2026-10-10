@@ -6,7 +6,8 @@
   position: absolute; right: 0; bottom: -1.6em; font-size: 14px; opacity: 0; transition: opacity 0.2s;
   color: #1d5fa8; text-decoration: none; border: 1px solid #d5d3cc; border-radius: 4px; padding: 0 6px; background: #fff;
 }
-.reveal figure.argmap:hover .argmap-download { opacity: 1; }
+.reveal figure.argmap:hover .argmap-download, .reveal .argmap-download:focus-visible { opacity: 1; }
+.reveal .argmap-download:focus-visible { outline: 3px solid #1d5fa8; outline-offset: 2px; }
 @media print { .reveal .argmap-download { display: none; } }
 .reveal .argmap-error { text-align: left; font-size: 18px; color: #c62828; border: 2px solid #c62828; border-radius: 8px; padding: 0.5em 1em; }
 .reveal .argmap-error ul { margin: 0.3em 0 0 1em; }
@@ -27,3 +28,14 @@ body.deck-index { font-family: system-ui, -apple-system, 'Segoe UI', Roboto, san
 html, body { margin: 0; }
 body:not(.deck-index), body:not(.deck-index) #root { height: 100%; }
 html:has(body:not(.deck-index)) { height: 100%; }
+
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* Accessibility: a readable, tappable slide number, visible focus on the controls, and no
+   motion for people who ask their system for less. */
+.reveal .slide-number { background: #3d434b; color: #fff; font-size: 16px; left: 8px; right: auto; bottom: 8px; }
+.reveal .slide-number a { display: inline-block; min-height: 24px; padding: 2px 4px; color: #fff; }
+.reveal .controls button:focus-visible, .reveal .slide-number a:focus-visible { outline: 3px solid #1d5fa8; outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) {
+  .reveal .fragment, .reveal .argmap-download { transition: none !important; }
+}

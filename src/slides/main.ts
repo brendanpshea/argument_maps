@@ -61,8 +61,16 @@ if (!deck) {
   // Set the Markdown as text, not HTML: inside a textarea, innerHTML would decode the
   // entities in the rendered diagrams (&quot;, &lt;, &amp;) back into raw characters.
   root.querySelector('textarea')!.textContent = deck.markdown;
+  const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
   void Reveal.initialize({ hash: true, slideNumber: 'c/t', plugins: [Markdown, Notes], width: 1280, height: 800, margin: 0.06,
+    // No sliding between slides for people who ask their system for less motion.
+    transition: reduceMotion ? 'none' : 'slide',
+    backgroundTransition: reduceMotion ? 'none' : 'fade',
     // PDF handouts: one page per slide, showing every step.
     pdfSeparateFragments: false,
+  }).then(() => {
+    // reveal.js puts its arrows in an <aside>, a landmark nested inside the page; they're just controls.
+    const controls = document.querySelector('.reveal .controls');
+    controls?.setAttribute('role', 'none');
   });
 }

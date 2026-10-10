@@ -179,7 +179,7 @@ function wordingItems(lesson: Lesson, map: ArgumentMap, mapping: Record<string, 
     } else if (chosen) {
       items.push({ status: 'wrong', earned: 0, possible: POINTS.wording, message: `Wording of ${name(id)}: ${chosen.why ?? 'there is a clearer, more accurate wording.'}` });
     } else {
-      items.push({ status: 'missing', earned: 0, possible: POINTS.wording, message: `Choose the clearest wording for ${name(id)} (the ✎ button).` });
+      items.push({ status: 'missing', earned: 0, possible: POINTS.wording, message: `Choose the clearest wording for ${name(id)} (✎ on the map, or the wording menu in the outline).` });
     }
   }
   return items;
@@ -250,7 +250,9 @@ function gradeEvaluation(lesson: Lesson, step: Step, map: ArgumentMap): GradeRes
   for (const key of step.evaluations) {
     const rel = map.relations.find((r) => keys.get(r.id) === key);
     if (!rel) continue; // e.g. an optional link the student left out
-    const link = `${joinNames(rel.from.map(nodeName))} → ${nodeName(rel.to)}`;
+    // Words, not an arrow: screen readers read "→" as "right arrow".
+    const link = `from ${joinNames(rel.from.map(nodeName))} to ${nodeName(rel.to)}`;
+    const Link = `From ${joinNames(rel.from.map(nodeName))} to ${nodeName(rel.to)}`;
     const premises = rel.from.length > 1 ? 'the premises' : 'the premise';
     const given = rel.evaluation ?? {};
     const gradeQuality = step.ask === 'full' && key.quality.length > 0;
@@ -265,21 +267,21 @@ function gradeEvaluation(lesson: Lesson, step: Step, map: ArgumentMap): GradeRes
         possible: 1 + (gradeQuality ? 1 : 0),
         message:
           key.hint ??
-          `${link}: is the arguer claiming that ${premises} guarantee the conclusion, or only that they make it likely? Look at the words that introduce it.`,
+          `${Link}: is the arguer claiming that ${premises} guarantee the conclusion, or only that they make it likely? Look at the words that introduce it.`,
       });
       continue;
     }
-    items.push({ status: 'correct', earned: 1, possible: 1, message: `${link}: ${key.type}.` });
+    items.push({ status: 'correct', earned: 1, possible: 1, message: `${Link}: ${key.type}.` });
     if (!gradeQuality) continue;
     if (!given.quality) {
-      items.push({ status: 'missing', earned: 0, possible: 1, message: `${link}: you classified it; now judge how good the reasoning is.` });
+      items.push({ status: 'missing', earned: 0, possible: 1, message: `${Link}: you classified it; now judge how good the reasoning is.` });
     } else if (key.quality.includes(given.quality)) {
-      items.push({ status: 'correct', earned: 1, possible: 1, message: `${link}: ${given.quality}.` });
+      items.push({ status: 'correct', earned: 1, possible: 1, message: `${Link}: ${given.quality}.` });
     } else {
       const auto =
         key.type === 'deductive'
-          ? `${link}: imagine ${premises} true. Could the conclusion still be false? If not, it's valid; if so, it's invalid.`
-          : `${link}: if ${premises} were true, how likely would the conclusion be? Could something else easily explain ${rel.from.length > 1 ? 'them' : 'it'}?`;
+          ? `${Link}: imagine ${premises} true. Could the conclusion still be false? If not, it's valid; if so, it's invalid.`
+          : `${Link}: given everything on your map, how likely is the conclusion? Is there an objection nobody has answered, or something else that could easily explain ${rel.from.length > 1 ? 'the premises' : 'the premise'}?`;
       items.push({ status: 'wrong', earned: 0, possible: 1, message: key.hint ?? auto });
     }
   }

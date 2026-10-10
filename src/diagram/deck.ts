@@ -62,8 +62,14 @@ export function buildDeck(
       return `\n<div class="argmap-error"><strong>Diagram ${index} has errors:</strong><ul>${list}</ul></div>\n`;
     }
     // One line of HTML, surrounded by blank lines, so Markdown passes it through untouched.
-    const download = pngPath ? `<a class="argmap-download" href="${pngPath(index)}" download title="Download as PNG">PNG</a>` : '';
-    return `\n<figure class="argmap" aria-label="${describe(result.diagram!).replace(/"/g, '&quot;')}">${svg}${download}</figure>\n`;
+    const download = pngPath
+      ? `<a class="argmap-download" href="${pngPath(index)}" download title="Download as PNG">PNG<span class="visually-hidden"> image of diagram ${index}</span></a>`
+      : '';
+    // Screen readers get the description once, as text; the drawing itself is hidden from them
+    // (otherwise its labels are read out as a jumble, and the description twice).
+    const description = describe(result.diagram!).replace(/&/g, '&amp;').replace(/</g, '&lt;');
+    const hidden = svg.replace(/ role="img" aria-label="[^"]*"/, ' aria-hidden="true"');
+    return `\n<figure class="argmap">${hidden}<figcaption class="visually-hidden">Diagram: ${description}</figcaption>${download}</figure>\n`;
   });
   // From the Markdown after the diagrams are replaced, so a `# comment` in a diagram isn't the title.
   const title = markdown.match(/^#[ \t]+(.+)$/m)?.[1].trim() ?? id;

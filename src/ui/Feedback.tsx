@@ -30,7 +30,8 @@ export function Feedback({ lesson, map, result, rewordStep, conclusionStep, eval
   const freeReword = rewordStep && lesson.rewording === 'free';
 
   return (
-    <section className="feedback" aria-live="polite">
+    <section className="feedback" aria-labelledby="feedback-heading">
+      <h2 id="feedback-heading" className="visually-hidden">Feedback</h2>
       <div className="score">
         {!freeReword && (
           <>
@@ -81,7 +82,7 @@ export function Feedback({ lesson, map, result, rewordStep, conclusionStep, eval
             : rewordStep
               ? 'Choose a better wording and check again.'
               : evaluateStep
-                ? 'Click a link’s label to change your evaluation, then check again.'
+                ? 'Change your evaluation (with a link’s label on the map, or in the outline), then check again.'
                 : 'Revise your map and check again.'}
         </p>
       )}

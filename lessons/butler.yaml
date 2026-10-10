@@ -9,7 +9,7 @@ rewording: none
 steps:
   - task: conclusion
     title: Find the main conclusion
-    instructions: Which claim is the speaker trying to get you to accept? Click it.
+    instructions: Which claim is the speaker trying to get you to accept? Choose it in the passage.
     passage: |
       {{x1|Someone stole the jewels from Lady Ashworth's safe last night.}} I'm convinced
       {{c|the butler is the thief}}.
@@ -41,7 +41,7 @@ steps:
   - task: evaluate
     title: Evaluate the reasoning
     instructions: >
-      Click each link's label. First decide whether the speaker presents the
+      Evaluate each link (with its label on the map, or in the outline). First decide whether the speaker presents the
       premises as guaranteeing the conclusion (deductive) or as making it likely
       (inductive); words like “must”, “could only”, “very likely”, and
       “suggests” are clues. Then judge the reasoning: for a deductive link, if

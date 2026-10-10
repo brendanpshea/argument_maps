@@ -85,7 +85,8 @@ button.link-button { border: none; background: none; color: var(--accent); paddi
   .player { height: auto; }
   .player-body { flex-direction: column; }
   .side { width: 100%; border-right: none; border-bottom: 1px solid var(--border); }
-  .canvas { height: 75vh; }
+  /* A fixed height (not flex: 1, whose zero basis collapses the map to nothing here). */
+  .canvas { flex: none; height: 75vh; min-height: 320px; }
 }
 
 /* Passage */
@@ -105,8 +106,8 @@ button.link-button { border: none; background: none; color: var(--accent); paddi
 .passage-claim[aria-disabled='true'] { cursor: default; }
 .passage-claim.in-map { background: var(--mark); border-bottom-color: transparent; }
 .passage-claim .claim-number { font-family: system-ui, sans-serif; font-size: 0.8rem; font-weight: 700; color: var(--accent); }
-.highlight-actions { display: flex; align-items: center; gap: 0.6rem; margin-top: 0.4rem; }
-.highlight-actions .hint { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.highlight-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; margin-top: 0.4rem; }
+.highlight-actions .hint { flex: 1; min-width: 12rem; }
 
 /* Choice + feedback */
 .choice { padding: 0.75rem; border: 1px solid var(--accent); border-radius: 8px; display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
@@ -135,11 +136,12 @@ details > summary { cursor: pointer; color: var(--accent); }
 .outline-claims li { display: grid; grid-template-columns: 1fr auto; gap: 0.25rem 0.5rem; align-items: center; }
 .outline-claims textarea { grid-column: 1 / -1; width: 100%; font: inherit; font-size: 0.9rem; }
 .outline-links li { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; font-size: 0.9rem; }
-.outline-links li span { flex: 1 1 100%; }
+.outline-links li > span { flex: 1 1 100%; }
 .outline strong.support { color: var(--support); }
 .outline strong.objection { color: var(--objection); }
 .add-link { margin-top: 0.75rem; border: 1px solid var(--border); border-radius: 8px; display: grid; gap: 0.5rem; font-size: 0.9rem; }
-.add-link .check { display: block; }
+.add-link .check { display: flex; align-items: center; gap: 0.4rem; min-height: 28px; }
+.add-link .check input, .outline input[type='radio'] { width: 1.15rem; height: 1.15rem; margin: 0; flex: none; }
 
 /* Map canvas */
 .map-editor { position: absolute; inset: 0; }
@@ -147,7 +149,11 @@ details > summary { cursor: pointer; color: var(--accent); }
   position: absolute; z-index: 5; top: 0.6rem; right: 0.6rem; padding: 0.25rem 0.6rem; border-radius: 6px;
   background: var(--conclusion); color: #fff; font-size: 0.85rem; font-weight: 600;
 }
-.map-toolbar { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+.map-toolbar { position: absolute; top: 15px; left: 15px; right: 15px; z-index: 5; display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; pointer-events: none; }
+.map-toolbar > * { pointer-events: auto; }
+/* React Flow hides focus on claims and links; keyboard users need to see it. */
+.react-flow .react-flow__node:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; border-radius: 8px; }
+.map-editor:focus { outline: none; }
 .segmented { display: flex; align-items: center; gap: 0; background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding-left: 0.5rem; font-size: 0.85rem; }
 .segmented span { margin-right: 0.4rem; color: var(--muted); }
 .segmented button { border: none; border-left: 1px solid var(--border); border-radius: 0; }
@@ -178,10 +184,10 @@ details > summary { cursor: pointer; color: var(--accent); }
 .status-pill.answered { color: #4f545b; border-color: #8a8f98; }
 .claim-head { display: flex; flex-wrap: wrap; align-items: center; gap: 0.1rem 0.35rem; min-height: 1.4rem; font-size: 0.72rem; }
 .claim-head .claim-number { font-weight: 700; color: var(--accent); font-size: 0.8rem; }
-.conclusion-tag { font-weight: 700; color: var(--conclusion); text-transform: uppercase; letter-spacing: 0.03em; }
+.conclusion-tag { font-weight: 700; color: #85560f; text-transform: uppercase; letter-spacing: 0.03em; }
 .reworded-tag { color: var(--muted); font-style: italic; }
 .node-tools { margin-left: auto; display: flex; gap: 0.1rem; flex: none; }
-.node-tools .icon { padding: 0 0.3rem; border: none; background: none; color: var(--muted); font-size: 0.95rem; line-height: 1.2; }
+.node-tools .icon { min-width: 24px; min-height: 24px; padding: 0 0.3rem; border: none; background: none; color: var(--muted); font-size: 0.95rem; line-height: 1.2; }
 .node-tools .icon:hover { color: var(--text); }
 .node-tools .icon[aria-pressed='true'] { color: var(--conclusion); }
 .claim-text { white-space: pre-wrap; }
@@ -194,13 +200,13 @@ details > summary { cursor: pointer; color: var(--accent); }
   min-width: 96px; padding: 0.15rem 0.6rem; border-radius: 999px; font-size: 0.75rem; font-weight: 700;
   text-transform: uppercase; letter-spacing: 0.03em;
 }
-.junction-support button { background: var(--support-bg); border: 2px solid var(--support); color: var(--support); }
+.junction-support button { background: var(--support-bg); border: 2px solid var(--support); color: #256b29; }
 .junction-objection button { background: var(--objection-bg); border: 2px solid var(--objection); color: var(--objection); }
 .junction button:disabled { opacity: 1; }
 .react-flow__node-junction.selected .junction > button { box-shadow: 0 0 0 3px #1d5fa855; }
 
 /* Claim bank and wording choices */
-.claim-bank h3 { font-size: 0.95rem; margin: 0 0 0.25rem; }
+.claim-bank h2 { font-size: 0.95rem; margin: 0 0 0.25rem; }
 .claim-bank p { margin: 0 0 0.5rem; }
 .claim-bank ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 0.4rem; }
 .claim-bank li {
@@ -268,11 +274,14 @@ details > summary { cursor: pointer; color: var(--accent); }
 .junction .link-menu[role='dialog'] { min-width: 260px; padding: 0.5rem; gap: 0.4rem; }
 .eval-group { border: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 0.3rem; }
 .eval-group legend { font-size: 0.78rem; color: var(--muted); margin-bottom: 0.25rem; padding: 0; text-transform: none; letter-spacing: 0; font-weight: 500; }
-.junction .eval-group button, .outline-eval .eval-group button {
-  min-width: 0; flex: 1; border: 1px solid var(--border); border-radius: 6px; background: var(--panel); color: var(--text);
-  text-transform: capitalize; letter-spacing: 0; font-weight: 500; font-size: 0.8rem; padding: 0.3rem 0.5rem;
+.eval-group label {
+  flex: 1; display: flex; align-items: center; gap: 0.3rem; min-height: 32px; cursor: pointer;
+  border: 1px solid var(--border); border-radius: 6px; background: var(--panel); color: var(--text);
+  font-weight: 500; font-size: 0.8rem; padding: 0.3rem 0.5rem; text-transform: none;
 }
-.junction .eval-group button.on, .outline-eval .eval-group button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.eval-group label.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.eval-group label:focus-within { outline: 3px solid var(--accent); outline-offset: 2px; }
+.eval-group input[type='radio'] { margin: 0; }
 .outline-eval { flex: 1 1 100%; display: grid; gap: 0.4rem; padding: 0.4rem 0; }
 
 /* Explanation lessons */
@@ -282,8 +291,27 @@ details > summary { cursor: pointer; color: var(--accent); }
 /* Evaluation badges: square corners for deductive, rounded and dashed for inductive (not colour alone). */
 .eval-badge.deductive { border-radius: 2px; border-color: #6f747c; }
 .eval-badge.inductive { border-radius: 999px; border-style: dashed; border-color: #6f747c; }
-.eval-group button { text-transform: none !important; }
 
 /* Failed inferences (judged invalid or weak): grey, not the "good" green. */
 .junction-failed > button { background: #eeeff1; border: 2px solid #646a72; color: #4f545b; }
 .failed-mark { pointer-events: none; }
+
+/* Highlight mode: choosing a claim's words with the keyboard */
+.word-picker { flex-basis: 100%; font-size: 0.9rem; }
+.word-picker label { display: block; margin-top: 0.4rem; }
+.word-picker select { max-width: 100%; font: inherit; }
+button[aria-disabled='true'] { opacity: 0.55; }
+
+/* Outline mode: the outline takes the map's place */
+.outline-main { position: absolute; inset: 0; overflow-y: auto; padding: 1rem 16px; background: var(--panel); }
+.outline-main h2 { font-size: 1.1rem; margin: 0 0 0.5rem; }
+.outline-main .outline { max-width: 52rem; }
+.outline-wrap summary h2 { display: inline; font-size: inherit; margin: 0; }
+.outline-toggle[aria-pressed='true'] { background: var(--accent); border-color: var(--accent); color: #fff; }
+.outline-claim { margin: 0; grid-column: 1 / -1; }
+.outline-claim-actions, .outline-link-actions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; }
+.add-link-sources { border: none; padding: 0; margin: 0 0 0.5rem; }
+.add-link-sources legend { padding: 0; }
+.add-link select { max-width: 100%; }
+button.is-disabled { opacity: 0.55; }
+h3.new-tag { margin: 0; }

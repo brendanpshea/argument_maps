@@ -59,7 +59,7 @@ steps:
   - task: evaluate
     title: Evaluate the reasoning
     instructions: >
-      Click the label on the support link. First decide whether the argument
+      Evaluate the support link (with its label on the map, or in the outline). First decide whether the argument
       is deductive or inductive, then judge it. An inductive argument is
       judged on all the evidence on your map, not just its own premises, so
       an objection that hasn't been answered counts against it. (A deductive

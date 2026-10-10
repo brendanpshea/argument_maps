@@ -585,7 +585,7 @@ describe('evaluate steps', () => {
     const custom = grade(withEvals({ ...all, 'r-2': { type: 'deductive', quality: 'valid' } }));
     expect(custom.items.find((i) => i.status === 'wrong')?.message).toMatch(/What else might make someone nervous/);
     const auto = grade(withEvals({ ...all, 'r-3': { type: 'inductive', quality: 'strong' } }));
-    expect(auto.items.find((i) => i.status === 'wrong')?.message).toMatch(/how likely would the conclusion be/);
+    expect(auto.items.find((i) => i.status === 'wrong')?.message).toMatch(/given everything on your map, how likely is the conclusion/);
   });
 
   const yaml = (evaluations: string, extra = '') => `

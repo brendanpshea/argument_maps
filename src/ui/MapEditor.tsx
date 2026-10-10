@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useId, useRef, useState } from 'react';
 import {
   Background,
   BaseEdge,
@@ -31,6 +31,7 @@ import { toPng } from 'html-to-image';
 import { FAILED_COLOR, INDUCTIVE_DASH, isFailed, optionLabel, typeBadge, verdictLabel } from '../model/evaluationStyle';
 import { vocab } from '../model/vocab';
 import { claimStatuses, STATUS_LABEL, STATUS_TITLE, type ClaimStatus } from '../model/dialectic';
+import { linkSentence } from '../model/describe';
 import { QUALITIES, type LessonKind, type ArgumentMap, type Evaluation, type InferenceQuality, type InferenceType, type MapNode, type MapRelation, type RelationType } from '../model/types';
 import { autoLayout, CLAIM_SIZE, JUNCTION_SIZE } from '../model/layout';
 import * as ops from '../model/ops';
@@ -55,10 +56,14 @@ type ClaimData = {
   locked: boolean;
   /** Where the claim stands in the debate on this map: challenged or answered. */
   status?: ClaimStatus;
+  /** How screen readers name the claim, e.g. "(3) “Large animals suffer…”". */
+  name: string;
 };
 type JunctionData = {
   type: RelationType;
   label: string;
+  /** The link as a sentence, e.g. "(3) supports (2)", for screen readers. */
+  description: string;
   premises: number;
   /** Claims that could be added to this link as linked premises. */
   candidates: { id: string; name: string }[];
@@ -105,7 +110,7 @@ function ClaimNode({ id, data, selected }: NodeProps<ClaimNodeT>) {
     >
       <SideHandles />
       {data.status && (
-        <span className={`status-pill ${data.status}`} title={STATUS_TITLE[data.status]}>
+        <span className={`status-pill ${data.status}`} title={STATUS_TITLE[data.status]} aria-hidden="true">
           {STATUS_LABEL[data.status]}
         </span>
       )}
@@ -120,37 +125,46 @@ function ClaimNode({ id, data, selected }: NodeProps<ClaimNodeT>) {
               <button
                 className="nodrag icon"
                 title={`${data.isConclusion ? 'Unmark' : 'Mark as'} ${data.conclusionLabel.toLowerCase()}`}
+                aria-label={`${data.conclusionLabel}: ${data.name}`}
                 aria-pressed={data.isConclusion}
                 onClick={() => actions.toggleConclusion(id)}
               >
-                ★
+                <span aria-hidden="true">★</span>
               </button>
             )}
             {data.edit.kind !== 'none' && (
               <button
                 className="nodrag icon"
                 title={data.edit.kind === 'choose' ? 'Choose a wording' : 'Reword this claim'}
-                aria-pressed={editing}
+                aria-label={`Reword ${data.name}`}
+                aria-expanded={editing}
                 onClick={() => { setDraft(data.text); setEditing(!editing); }}
               >
-                ✎
+                <span aria-hidden="true">✎</span>
               </button>
             )}
             {!data.locked && (
-              <button className="nodrag icon" title="Remove from map" onClick={() => actions.removeNode(id)}>
-                ×
+              <button
+                className="nodrag icon"
+                title="Remove from map"
+                aria-label={`Remove ${data.name} from the map`}
+                onClick={() => {
+                  actions.removeNode(id);
+                  refocus(null);
+                }}
+              >
+                <span aria-hidden="true">×</span>
               </button>
             )}
           </span>
         )}
       </div>
       {editing && data.edit.kind === 'choose' ? (
-        <div className="nodrag wording-choices" role="radiogroup" aria-label="Choose a wording">
+        <div className="nodrag wording-choices" role="group" aria-label={`Choose a wording for ${data.name}`}>
           {[data.originalText, ...data.edit.choices.filter((c) => c !== data.originalText)].map((choice, i) => (
             <button
               key={i}
-              role="radio"
-              aria-checked={choice === data.text}
+              aria-pressed={choice === data.text}
               className={`nodrag${choice === data.text ? ' on' : ''}`}
               onClick={() => { actions.setText(id, choice); setEditing(false); }}
             >
@@ -198,18 +212,32 @@ function SideHandles() {
   );
 }
 
+/** Puts keyboard focus back on `el` after a change, or on the map if `el` has gone. */
+const refocus = (el: HTMLElement | null) =>
+  requestAnimationFrame(() => (el?.isConnected ? el : document.querySelector<HTMLElement>('.map-editor'))?.focus());
+
 function JunctionNode({ id, data, selected }: NodeProps<JunctionNodeT>) {
   const actions = useContext(ActionsContext)!;
   const [open, setOpen] = useState(false);
   const [picking, setPicking] = useState(false);
+  const trigger = useRef<HTMLButtonElement>(null);
+  const menu = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!selected) setOpen(false);
   }, [selected]);
   useEffect(() => {
     if (!open) setPicking(false);
   }, [open]);
-  const act = (fn: () => void) => () => {
+  // Opening a menu (or its "link with" list) moves focus into it.
+  useEffect(() => {
+    if (open) menu.current?.querySelector<HTMLElement>('button, input')?.focus();
+  }, [open, picking]);
+  const close = () => {
     setOpen(false);
+    refocus(trigger.current);
+  };
+  const act = (fn: () => void) => () => {
+    close();
     fn();
   };
   const ev = data.evaluation;
@@ -217,17 +245,26 @@ function JunctionNode({ id, data, selected }: NodeProps<JunctionNodeT>) {
   // tappable when the map is zoomed out to fit a small screen.
   const zoom = useStore((s) => s.transform[2]);
   const menuScale = Math.min(2.5, Math.max(1, 1 / zoom));
+  const judged = ev?.type ? `, judged ${[ev.type, ev.quality].filter(Boolean).join(', ')}` : '';
   return (
     <div
       className={`junction junction-${isFailed(data.evaluation) ? 'failed' : data.type}`}
       style={{ '--menu-scale': menuScale } as React.CSSProperties}
+      onKeyDown={(e) => {
+        if (e.key === 'Escape' && open) {
+          e.stopPropagation();
+          close();
+        }
+      }}
     >
       <SideHandles />
       <button
+        ref={trigger}
         className="nodrag"
         disabled={data.readOnly && !data.evaluate}
-        aria-haspopup={data.evaluate ? 'dialog' : 'menu'}
+        aria-haspopup={data.evaluate ? 'dialog' : 'true'}
         aria-expanded={open}
+        aria-label={`${data.description}${judged}. ${data.evaluate ? 'Evaluate this reasoning' : data.readOnly ? '' : 'Change or delete this link'}`}
         title={data.evaluate ? 'Evaluate this reasoning' : data.readOnly ? undefined : 'Change or delete this link'}
         onClick={() => setOpen(!open)}
       >
@@ -235,57 +272,53 @@ function JunctionNode({ id, data, selected }: NodeProps<JunctionNodeT>) {
         {verdictLabel(data.evaluation) ?? data.label}
       </button>
       {ev?.type ? (
-        <span className={`eval-badge ${ev.type}`}>{typeBadge(ev)}</span>
+        <span className={`eval-badge ${ev.type}`} aria-hidden="true">
+          {typeBadge(ev)}
+        </span>
       ) : (
-        data.evaluate && <span className="eval-badge todo">evaluate?</span>
+        data.evaluate && (
+          <span className="eval-badge todo" aria-hidden="true">
+            evaluate?
+          </span>
+        )
       )}
       {open && data.evaluate && (
-        <EvaluationPicker
-          className="link-menu nodrag"
-          ask={data.evaluate}
-          value={ev ?? {}}
-          onChange={(next) => {
-            actions.setEvaluation(id, next);
-            if (next.type && (data.evaluate === 'type' || next.quality)) setOpen(false);
-          }}
-        />
+        <div ref={menu}>
+          <EvaluationPicker
+            className="link-menu nodrag"
+            dialog
+            label={data.description}
+            ask={data.evaluate}
+            value={ev ?? {}}
+            onChange={(next) => {
+              actions.setEvaluation(id, next);
+              if (next.type && (data.evaluate === 'type' || next.quality)) close();
+            }}
+          />
+        </div>
       )}
       {open && !data.evaluate && picking && (
-        <div className="link-menu nodrag" role="menu" aria-label={vocab(data.kind).linkWith}>
+        <div ref={menu} className="link-menu nodrag" role="group" aria-label={vocab(data.kind).linkWith}>
           <p className="link-menu-title">{vocab(data.kind).linkWithQuestion(data.premises > 1)}</p>
           {data.candidates.map((c) => (
-            <button key={c.id} role="menuitem" onClick={act(() => actions.linkPremise(id, c.id))}>
+            <button key={c.id} onClick={act(() => actions.linkPremise(id, c.id))}>
               {c.name}
             </button>
           ))}
-          <button role="menuitem" className="muted" onClick={() => setPicking(false)}>
+          <button className="muted" onClick={() => setPicking(false)}>
             ← Back
           </button>
         </div>
       )}
       {open && !data.evaluate && !picking && (
-        <div className="link-menu nodrag" role="menu">
-          {data.candidates.length > 0 && (
-            <button role="menuitem" onClick={() => setPicking(true)}>
-              {vocab(data.kind).linkWith}
-            </button>
-          )}
-          {data.premises > 1 && (
-            <button role="menuitem" onClick={act(() => actions.split(id))}>
-              {vocab(data.kind).split}
-            </button>
-          )}
+        <div ref={menu} className="link-menu nodrag" role="group" aria-label={`Options for: ${data.description}`}>
+          {data.candidates.length > 0 && <button onClick={() => setPicking(true)}>{vocab(data.kind).linkWith}</button>}
+          {data.premises > 1 && <button onClick={act(() => actions.split(id))}>{vocab(data.kind).split}</button>}
           {data.type !== 'explanation' && (
-            <button role="menuitem" onClick={act(() => actions.toggleType(id))}>
-              Change to {data.type === 'support' ? 'objection' : 'support'}
-            </button>
+            <button onClick={act(() => actions.toggleType(id))}>Change to {data.type === 'support' ? 'objection' : 'support'}</button>
           )}
-          {data.premises === 1 && (
-            <button role="menuitem" onClick={act(() => actions.reverse(id))}>
-              Reverse direction
-            </button>
-          )}
-          <button role="menuitem" className="danger" onClick={act(() => actions.removeRelation(id))}>
+          {data.premises === 1 && <button onClick={act(() => actions.reverse(id))}>Reverse direction</button>}
+          <button className="danger" onClick={act(() => actions.removeRelation(id))}>
             Delete link
           </button>
         </div>
@@ -300,32 +333,44 @@ export function EvaluationPicker({
   value,
   onChange,
   className,
+  label,
+  dialog,
 }: {
   ask: 'type' | 'full';
   value: Evaluation;
   onChange: (next: Evaluation) => void;
   className?: string;
+  /** Says which link this is, e.g. "(3) supports (2)". */
+  label: string;
+  /** Shown as a pop-up on the map (otherwise inline, in the outline). */
+  dialog?: boolean;
 }) {
-  const group = (legend: string, options: string[], current: string | undefined, pick: (o: string) => void) => (
+  const name = useId();
+  const group = (key: string, legend: string, options: string[], current: string | undefined, pick: (o: string) => void) => (
     <fieldset className="eval-group">
       <legend>{legend}</legend>
       {options.map((o) => (
-        <button key={o} role="radio" aria-checked={current === o} className={current === o ? 'on' : ''} onClick={() => pick(o)}>
-          {optionLabel(o as InferenceType | InferenceQuality)}
-        </button>
+        <label key={o} className={current === o ? 'on' : ''}>
+          <input type="radio" name={`${name}-${key}`} checked={current === o} onChange={() => pick(o)} />
+          <span aria-hidden="true">{optionLabel(o as InferenceType | InferenceQuality).split(' ')[0]} </span>
+          {o}
+        </label>
       ))}
     </fieldset>
   );
   return (
-    <div className={className} role="dialog" aria-label="Evaluate this reasoning">
-      {group('Do the premises claim to guarantee the conclusion, or make it likely?', ['deductive', 'inductive'], value.type, (t) =>
+    <div className={className} role={dialog ? 'dialog' : 'group'} aria-label={`Evaluate: ${label}`}>
+      {group('type', 'Do the premises claim to guarantee the conclusion, or make it likely?', ['deductive', 'inductive'], value.type, (t) =>
         // Changing the type resets the quality, whose options depend on it.
         onChange({ type: t as InferenceType, quality: t === value.type ? value.quality : undefined }),
       )}
       {ask === 'full' &&
         value.type &&
         group(
-          value.type === 'deductive' ? 'If the premises were true, would the conclusion have to be true?' : 'If the premises were true, how likely would the conclusion be?',
+          'quality',
+          value.type === 'deductive'
+            ? 'If the premises were true, would the conclusion have to be true?'
+            : 'Given everything on the map, how likely is the conclusion?',
           QUALITIES[value.type],
           value.quality,
           (q) => onChange({ ...value, quality: q as InferenceQuality }),
@@ -367,7 +412,6 @@ function LinkEdge({ id, sourceX, sourceY, targetX, targetY, sourcePosition, targ
   );
 }
 
-const truncate = (s: string, n = 48) => (s.length > n ? `${s.slice(0, n - 1).trimEnd()}…` : s);
 
 const nodeTypes = { claim: ClaimNode, junction: JunctionNode };
 const edgeTypes = { link: LinkEdge };
@@ -400,6 +444,11 @@ function buildNodes(map: ArgumentMap, props: MapEditorProps, prev: Node[]): Node
   const readOnly = !!props.readOnly;
   const locked = !!props.locked;
   const statuses = claimStatuses(map.relations);
+  const nameOf = (id: string) => {
+    const n = map.nodes.find((x) => x.id === id);
+    return [props.labelFor?.(id), `“${n?.text ?? ''}”`].filter(Boolean).join(' ');
+  };
+  const shortName = (id: string) => props.labelFor?.(id) ?? nameOf(id);
   return [
     ...map.nodes.map(
       (n): ClaimNodeT => ({
@@ -418,7 +467,15 @@ function buildNodes(map: ArgumentMap, props: MapEditorProps, prev: Node[]): Node
           readOnly,
           locked,
           status: statuses.get(n.id),
+          name: nameOf(n.id),
         },
+        ariaLabel: [
+          map.conclusion === n.id ? vocab(props.kind ?? 'argument').Conclusion : props.tagFor?.(n.id) && `${props.tagFor(n.id)} claim`,
+          nameOf(n.id),
+          statuses.get(n.id) && `(${statuses.get(n.id)})`,
+        ]
+          .filter(Boolean)
+          .join(' '),
       }),
     ),
     ...map.relations.map((r): JunctionNodeT => {
@@ -430,13 +487,14 @@ function buildNodes(map: ArgumentMap, props: MapEditorProps, prev: Node[]): Node
         data: {
           type: r.type,
           label: ops.relationLabel(map, r.id),
+          description: linkSentence(map, r, shortName),
           premises: r.from.length,
           evaluation: r.evaluation,
           evaluate: props.evaluateFor?.(r.id) ?? undefined,
           kind: props.kind ?? 'argument',
           candidates: map.nodes
             .filter((n) => n.id !== r.to && !r.from.includes(n.id))
-            .map((n) => ({ id: n.id, name: [props.labelFor?.(n.id), truncate(n.text)].filter(Boolean).join(' ') })),
+            .map((n) => ({ id: n.id, name: nameOf(n.id) })),
           readOnly: readOnly || locked,
         },
       };
@@ -734,13 +792,36 @@ function Editor(props: MapEditorProps) {
 
   const arrange = () => {
     commit(autoLayout(mapRef.current));
-    setTimeout(() => flow.fitView({ padding: 0.15, duration: 300 }), 50);
+    setTimeout(() => flow.fitView({ padding: 0.15, duration: matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 300 }), 50);
   };
 
   return (
     <ActionsContext.Provider value={actions}>
-      <div className="map-editor" ref={wrapper}>
+      <div className="map-editor" ref={wrapper} tabIndex={-1}>
+        {/* Before the canvas, so keyboard users reach the tools first. */}
+        <div className="map-toolbar" role="toolbar" aria-label="Map tools">
+          {!fixed && !explanation && (
+            <div className="segmented" role="group" aria-label="Type of new links">
+              <span>New links:</span>
+              <button aria-pressed={linkType === 'support'} className={linkType === 'support' ? 'on support' : ''} onClick={() => setLinkType('support')}>
+                Support
+              </button>
+              <button aria-pressed={linkType === 'objection'} className={linkType === 'objection' ? 'on objection' : ''} onClick={() => setLinkType('objection')}>
+                Objection
+              </button>
+            </div>
+          )}
+          {!readOnly && <button onClick={arrange}>Auto-arrange</button>}
+          <button onClick={exportPng} disabled={!nodes.length}>Download image</button>
+        </div>
         <ReactFlow
+          aria-label="Map canvas (drag and drop). The outline view does the same with a keyboard."
+          edgesFocusable={false}
+          ariaLabelConfig={{
+            'node.a11yDescription.default': 'Press Enter to select, then use the arrow keys to move it.',
+            'node.a11yDescription.keyboardDisabled': 'Press Enter to select, then use the arrow keys to move it.',
+            'node.a11yDescription.ariaLiveMessage': () => '',
+          }}
           nodes={nodes}
           edges={edges}
           nodeTypes={nodeTypes}
@@ -764,21 +845,6 @@ function Editor(props: MapEditorProps) {
         >
           <Background gap={20} />
           <Controls showInteractive={false} />
-          <Panel position="top-left" className="map-toolbar">
-            {!fixed && !explanation && (
-              <div className="segmented" role="radiogroup" aria-label="Type of new links">
-                <span>New links:</span>
-                <button role="radio" aria-checked={linkType === 'support'} className={linkType === 'support' ? 'on support' : ''} onClick={() => setLinkType('support')}>
-                  Support
-                </button>
-                <button role="radio" aria-checked={linkType === 'objection'} className={linkType === 'objection' ? 'on objection' : ''} onClick={() => setLinkType('objection')}>
-                  Objection
-                </button>
-              </div>
-            )}
-            {!readOnly && <button onClick={arrange}>Auto-arrange</button>}
-            <button onClick={exportPng} disabled={!nodes.length}>Download image</button>
-          </Panel>
           {!map.nodes.length && (
             <Panel position="top-center" className="empty-hint">
               Add claims from the passage to start your map.
