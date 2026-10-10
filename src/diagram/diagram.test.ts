@@ -62,6 +62,17 @@ describe('argmap syntax', () => {
     expect(svg).not.toContain('argmap-legend');
     expect(svg).not.toContain('stroke-dasharray');
   });
+
+  it('gives each diagram its own arrowhead ids, so arrows survive many diagrams on one page', () => {
+    const { diagram } = parseArgmap('C*: C\nP: P\nP -> C');
+    const ids = (svg: string) => [...svg.matchAll(/<marker id="([^"]+)"/g)].map((m) => m[1]);
+    const [a, b] = [renderDiagramSvg(diagram), renderDiagramSvg(diagram)];
+    expect(ids(a).filter((id) => ids(b).includes(id))).toEqual([]);
+    // Every arrow points at a marker in its own diagram.
+    for (const svg of [a, b]) {
+      for (const [, ref] of svg.matchAll(/marker-end="url\(#([^)]+)\)"/g)) expect(ids(svg)).toContain(ref);
+    }
+  });
 });
 
 describe('decks', () => {
