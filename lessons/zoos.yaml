@@ -1,9 +1,9 @@
 id: zoos
 title: Should zoos be phased out?
 description: >
-  A scaffolded lesson: find the main conclusion, map the argument (a linked
-  pair, a sub-argument, an objection, and a rebuttal), then state the claims
-  clearly. The claims are numbered for you.
+  A scaffolded lesson: find the main conclusion, map the argument (a
+  sub-argument, and two objections with their rebuttals), then state the
+  claims clearly. The claims are numbered for you.
 claimMode: marked
 rewording: choose
 
@@ -38,10 +38,18 @@ steps:
       relations:
         - { type: support, from: [c2], to: c1 }
         - { type: support, from: [c3], to: c2 }
-        - { type: support, from: [c4, c5], to: c1 }
+        - { type: objection, from: [c4], to: c1 }
+        - { type: rebuttal, from: [c5], to: c4 }
         - { type: objection, from: [c6], to: c1 }
         - { type: rebuttal, from: [c7], to: c6 }
     mistakes:
+      - relation: { type: support, from: [c4, c5], to: c1 }
+        message: >
+          Is (5) the author's own reason, or what defenders of zoos say? And
+          what does (6) do to it?
+      - relation: { type: support, from: [c5], to: c1 }
+        message: >
+          What is (6) responding to? Look at the “yet” just before it.
       - relation: { type: support, from: [c3], to: c1 }
         message: >
           Does (4) bear on the conclusion directly, or is it evidence for
