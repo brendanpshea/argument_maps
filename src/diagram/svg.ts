@@ -84,9 +84,15 @@ function pathThrough(points: { x: number; y: number }[]): string {
   return d;
 }
 
+// Marker ids are global to the page, and a slide deck shows many diagrams on one page.
+// If two diagrams shared ids, every arrow would point at the first diagram's markers,
+// which don't render while that diagram's slide is hidden. So each diagram gets its own.
+let diagramCount = 0;
+
 /** Renders a diagram as a standalone SVG string (usable in the browser and in Node). */
 export function renderDiagramSvg(d: Diagram): string {
   const V = vocab(d.kind);
+  const arrowId = `argmap${++diagramCount}-arrow`;
   const g = new dagre.graphlib.Graph();
   g.setGraph({ rankdir: 'BT', nodesep: 34, ranksep: 46, marginx: 12, marginy: 12 });
   g.setDefaultEdgeLabel(() => ({}));
@@ -111,8 +117,8 @@ export function renderDiagramSvg(d: Diagram): string {
   const markers = (['support', 'objection', 'explanation', 'failed'] as const)
     .map(
       (t) =>
-        `<marker id="arrow-${t}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="${COLOR[t]}"/></marker>` +
-        `<marker id="arrow-${t}-open" viewBox="0 0 12 12" refX="10" refY="6" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M1,1 L10,6 L1,11 z" fill="#ffffff" stroke="${COLOR[t]}" stroke-width="1.6" stroke-linejoin="round"/></marker>`,
+        `<marker id="${arrowId}-${t}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="${COLOR[t]}"/></marker>` +
+        `<marker id="${arrowId}-${t}-open" viewBox="0 0 12 12" refX="10" refY="6" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M1,1 L10,6 L1,11 z" fill="#ffffff" stroke="${COLOR[t]}" stroke-width="1.6" stroke-linejoin="round"/></marker>`,
     )
     .join('');
 
@@ -126,7 +132,7 @@ export function renderDiagramSvg(d: Diagram): string {
     // Inductive links are dashed with an open arrowhead; everything else is solid with a filled one.
     const inductive = l.evaluation?.type === 'inductive';
     const dash = inductive ? ` stroke-dasharray="${INDUCTIVE_DASH}"` : '';
-    const marker = `url(#arrow-${tone}${inductive ? '-open' : ''})`;
+    const marker = `url(#${arrowId}-${tone}${inductive ? '-open' : ''})`;
     const outPoints = g.edge(id, l.to).points;
     const lines = [
       ...l.from.map((f) => `<path d="${pathThrough(g.edge(f, id).points)}" fill="none" stroke="${color}" stroke-width="2.5"${dash}/>`),
