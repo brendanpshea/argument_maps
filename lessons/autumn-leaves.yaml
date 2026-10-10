@@ -19,15 +19,15 @@ steps:
       foliage.}} What they come for is the fact that {{e|maple leaves turn red and orange
       in autumn}}.
 
-      This happens because {{x1|as the days shorten, maple trees stop producing
-      chlorophyll}}, and {{x2|chlorophyll is the pigment that makes leaves green}}. With the
-      green gone, {{x3|yellow and orange pigments that were in the leaves all along become
-      visible}}.
+      The yellows and oranges come first. {{x1|As the days shorten, maple trees stop
+      producing chlorophyll}}, and {{x2|chlorophyll is the green pigment that hides the
+      other colors in a leaf}}. But {{x3|yellow and orange pigments are in the leaves all
+      summer long}}. So {{y|once the green fades, the yellows and oranges show through}}.
 
-      The reds have a different source: {{x4|in autumn, maples produce new red pigments
-      called anthocyanins}}. {{x5|They make the most anthocyanin when sunny days are
-      followed by cool nights}}, {{d2|which is why some years are more colorful than
-      others}}.
+      The reds have a different source: {{r|in autumn, maples make new red pigments
+      called anthocyanins}}. {{r1|Maples make anthocyanin from sugar trapped in their
+      leaves}}, and {{r2|sunny autumn days followed by cool nights leave sugar trapped in
+      the leaves}}.
     conclusionHints:
       d1: >
         The tourists are background. What do they come to see, and what is the
@@ -36,18 +36,25 @@ steps:
   - title: Map the explanation
     instructions: >
       Add the claims that help explain the explanandum, then drag from each
-      one to what it explains. Some claims only explain something together
-      with another claim; link those as a pair.
+      one to what it explains. Some claims explain something only in
+      combination with others; link those together.
     answer:
       explanandum: e
       relations:
-        - { type: explains, from: [x3], to: e }
-        - { type: explains, from: [x1, x2], to: x3 }
-        - { type: explains, from: [x4], to: e }
-        - { type: explains, from: [x5], to: x4 }
-        - { type: explains, from: [d2], to: x5, optional: true }
+        - { type: explains, from: [y], to: e }
+        - { type: explains, from: [x1, x2, x3], to: y }
+        - { type: explains, from: [r], to: e }
+        - { type: explains, from: [r1, r2], to: r }
     mistakes:
-      - relation: { type: explains, from: [x1, x2], to: e }
+      - relation: { type: explains, from: [x1, x2, x3], to: e }
         message: >
-          The loss of chlorophyll doesn't make leaves orange by itself. What
-          does losing the green reveal?
+          Those claims don't make leaves orange directly. Which claim says what
+          happens once the green is gone?
+      - relation: { type: explains, from: [x1, x2], to: y }
+        message: >
+          Losing the green only reveals yellow and orange if something was
+          hidden underneath. Which claim says those pigments were there all along?
+      - relation: { type: explains, from: [r1, r2], to: e }
+        message: >
+          The trapped sugar matters because of what maples make from it. Which
+          claim says what that is?
