@@ -344,6 +344,12 @@ function gradeAgainst(lesson: Lesson, step: Step, map: ArgumentMap, rawAnswer: A
     to: mapping[r.to] ? canon(mapping[r.to]) : undefined,
   }));
   const accounted = new Set<MapRelation>();
+  type StudentLink = (typeof student)[number];
+  /** The author's note for a link the lesson lists as a likely mistake, if this is one. */
+  const mistakeFor = (s: StudentLink) =>
+    step.mistakes.find((m) => m.relation.type === s.raw.type && canon(m.relation.to) === s.to && sameSet(m.relation.from.map(canon), s.from));
+  /** For a near-miss: the author's note if one of these links is a listed mistake (more specific than the generic hint). */
+  const authored = (links: StudentLink[]) => links.map(mistakeFor).find(Boolean)?.message;
 
   // Feedback names only claims the student already has on their map, and never
   // says what the correct link is: it points at where to look again.
@@ -396,7 +402,7 @@ function gradeAgainst(lesson: Lesson, step: Step, map: ArgumentMap, rawAnswer: A
         status: 'partial',
         earned: POINTS.relation / 2,
         possible: POINTS.relation,
-        message: `Look again at how ${names} ${plural ? 'connect' : 'connects'} to ${name(grouping[0].to!)}: ${V.groupingQuestion}`,
+        message: authored(grouping) ?? `Look again at how ${names} ${plural ? 'connect' : 'connects'} to ${name(grouping[0].to!)}: ${V.groupingQuestion}`,
       });
       continue;
     }
@@ -407,7 +413,7 @@ function gradeAgainst(lesson: Lesson, step: Step, map: ArgumentMap, rawAnswer: A
         status: 'wrong',
         earned: 0,
         possible: POINTS.relation,
-        message: `Check whether ${names} ${plural ? 'give' : 'gives'} a reason for ${name(sameTarget[0].to!)} or ${plural ? 'raise' : 'raises'} an objection to it.`,
+        message: authored(sameTarget) ?? `Check whether ${names} ${plural ? 'give' : 'gives'} a reason for ${name(sameTarget[0].to!)} or ${plural ? 'raise' : 'raises'} an objection to it.`,
       });
       continue;
     }
@@ -419,7 +425,7 @@ function gradeAgainst(lesson: Lesson, step: Step, map: ArgumentMap, rawAnswer: A
         status: 'wrong',
         earned: 0,
         possible: POINTS.relation,
-        message: `${names} ${plural ? 'are' : 'is'} connected to the wrong claim. Which claim ${plural ? 'do they' : 'does it'} bear on most directly?`,
+        message: authored(wrongTarget) ?? `${names} ${plural ? 'are' : 'is'} connected to the wrong claim. Which claim ${plural ? 'do they' : 'does it'} bear on most directly?`,
       });
       continue;
     }
@@ -453,9 +459,7 @@ function gradeAgainst(lesson: Lesson, step: Step, map: ArgumentMap, rawAnswer: A
   const explained = new Set<string>();
   for (const s of student) {
     if (accounted.has(s.raw)) continue;
-    const mistake = step.mistakes.find(
-      (m) => m.relation.type === s.raw.type && canon(m.relation.to) === s.to && sameSet(m.relation.from.map(canon), s.from),
-    );
+    const mistake = mistakeFor(s);
     const message =
       mistake?.message ??
       `Reconsider the link where ${joinNames(s.raw.from.map(nodeName))} ${verb(s.raw)} ${nodeName(s.raw.to)}. It doesn't fit the argument.`;

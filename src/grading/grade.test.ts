@@ -555,3 +555,30 @@ steps:
     ).toThrow(/apply to arguments, not explanations/);
   });
 });
+
+describe('authored mistakes', () => {
+  const survey = load('survey.yaml');
+  const withRelations = (stepIndex: number, relations: { type: string; from: string[]; to: string }[]) => {
+    const answer = survey.steps[stepIndex].answers[0];
+    return mapFromAnswer(survey, {
+      ...answer,
+      relations: relations.map((r) => ({ ...r, to: [r.to], grouping: 'exact', optional: false })),
+    } as typeof answer);
+  };
+
+  it('shows the author’s note for a near-miss instead of the generic hint', () => {
+    // The sample premise alone, without the unstated premise linked in.
+    const alone = gradeStep(survey, 0, withRelations(0, [{ type: 'support', from: ['s'], to: 'c' }]));
+    expect(alone.items.map((i) => i.message).join(' ')).toMatch(/would have to be true of them/);
+    // The objection aimed at the conclusion rather than the premise it doubts.
+    const atConclusion = gradeStep(
+      survey,
+      1,
+      withRelations(1, [
+        { type: 'support', from: ['s', 'r'], to: 'c' },
+        { type: 'objection', from: ['o'], to: 'c' },
+      ]),
+    );
+    expect(atConclusion.items.map((i) => i.message).join(' ')).toMatch(/isn't saying anything about how many students/);
+  });
+});

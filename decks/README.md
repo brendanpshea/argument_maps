@@ -38,6 +38,7 @@ O -x C
 |---|---|
 | `ID: text` | A claim. IDs are short names you choose (letters, digits, `-`, `_`). |
 | `ID*: text` | The main conclusion (or explanandum). Without a `*`, it's the claim that is supported but supports nothing. |
+| `ID (unstated): text` | An unstated premise: tagged "unstated" and drawn with a dashed border. |
 | `A -> B` | A supports B. |
 | `A + B -> C` | A and B together (linked) support C. |
 | `A -x B` | A objects to B. An objection to an objection is labelled *rebuts* automatically. |
@@ -45,6 +46,7 @@ O -x C
 | `… [deductive, valid]` | An evaluation badge on a link: `deductive`/`inductive` and `valid`/`invalid`/`strong`/`weak`. |
 | | Evaluated links are styled so nothing depends on colour alone. The **type** shows in the line and badge: deductive links are solid with a filled arrowhead and a square-cornered "∴ deductive" badge; inductive links are dashed with an open arrowhead and a rounded "≈ inductive" badge. The **verdict** becomes the link's label ("✓ VALID", "✓ STRONG", "✗ INVALID", "✗ WEAK"), and failed links (invalid or weak) are grey and broken by a circled ✗. Diagrams with evaluated links get a key along the bottom. |
 | `… @2` | Appear on the 2nd click (on a claim or a link). Links appear no earlier than their claims. |
+| | Claims with objections are marked automatically from the diagram's structure: **? CHALLENGED** (an amber pill and border) while an objection to it stands unanswered, and **✓ ANSWERED** once every objection to it has been rebutted. With `@n`, the mark changes on the click where the objection or rebuttal appears. This records the state of the debate; it doesn't say who is right. |
 | `# …` or `// …` | A comment. |
 
 ### Diagrams from lessons
@@ -64,7 +66,8 @@ apart.
 ## PNG images
 
 `npm run build` renders every diagram to `diagrams/<deck>/<n>.png` (and
-`.svg`) on the site, numbered in the order they appear in the deck. On a
+`.svg`) on the site, numbered in the order they appear in the deck. Images
+show the finished diagram (everything from every click). On a
 slide, hover over a diagram for a **PNG** download link, to paste into
 other slides, handouts, or an LMS. The build fails if any diagram has an
 error, and `npm test` checks every deck too.

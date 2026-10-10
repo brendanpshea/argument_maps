@@ -3,6 +3,7 @@ import type { ArgumentMap, LessonKind, MapNode, RelationType } from '../model/ty
 import { vocab } from '../model/vocab';
 import { EvaluationPicker, type WordingEdit } from './MapEditor';
 import * as ops from '../model/ops';
+import { claimStatuses, STATUS_LABEL, STATUS_TITLE } from '../model/dialectic';
 
 interface Props {
   /** Argument or explanation lesson: sets link types and wording. */
@@ -55,6 +56,7 @@ export function Outline({ map, onChange, nameFor, editFor, locked, evaluateFor, 
   const [premises, setPremises] = useState<string[]>([]);
   const [target, setTarget] = useState('');
   const [type, setType] = useState<RelationType>(explanation ? 'explanation' : 'support');
+  const statuses = claimStatuses(map.relations);
 
   const add = () => {
     if (!premises.length || !target) return;
@@ -70,6 +72,11 @@ export function Outline({ map, onChange, nameFor, editFor, locked, evaluateFor, 
         {map.nodes.map((n) => (
           <li key={n.id}>
             <ClaimWording node={n} edit={editFor(n.id)} label={`Wording of claim ${nameFor(n.id)}`} onChange={(text) => onChange(ops.setText(map, n.id, text))} />
+            {statuses.has(n.id) && (
+              <span className={`outline-status ${statuses.get(n.id)}`} title={STATUS_TITLE[statuses.get(n.id)!]}>
+                {STATUS_LABEL[statuses.get(n.id)!]}
+              </span>
+            )}
             {!locked && (
               <>
                 <label>

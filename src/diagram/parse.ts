@@ -5,6 +5,7 @@ import type { Diagram, DiagramClaim, DiagramLink } from './model';
  * Parses the `argmap` code-block syntax:
  *
  *   C*: The butler is the thief        a claim (`*` marks the main conclusion)
+ *   R (unstated): The sample is fair   an unstated premise (dashed border)
  *   P1: Only the butler had a key
  *   P1 + P2 -> C  [deductive, valid]   supports (linked premises joined with +)
  *   O -x C                             objects to (an objection to an objection reads "rebuts")
@@ -31,11 +32,12 @@ export function parseArgmap(source: string, options: { kind?: string } = {}): { 
       line = line.slice(0, stepMatch.index).trim();
     }
 
-    const claim = line.match(/^([A-Za-z][\w-]*)(\*)?\s*:\s*(.+)$/);
+    const claim = line.match(/^([A-Za-z][\w-]*)(\*)?\s*(?:\(([^)]*)\))?\s*:\s*(.+)$/);
     if (claim) {
-      const [, id, star, text] = claim;
+      const [, id, star, note, text] = claim;
       if (claims.some((c) => c.id === id)) errors.push(`${where}: claim ${id} is defined twice`);
-      claims.push({ id, text: text.trim(), step: step ?? 1 });
+      if (note !== undefined && note.trim() !== 'unstated') errors.push(`${where}: unknown note "(${note})" (the only one is "(unstated)")`);
+      claims.push({ id, text: text.trim(), step: step ?? 1, ...(note?.trim() === 'unstated' ? { tag: 'unstated' } : {}) });
       if (star) {
         if (starred) errors.push(`${where}: only one claim can be starred as the conclusion`);
         starred = id;
