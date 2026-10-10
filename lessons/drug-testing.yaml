@@ -13,7 +13,7 @@ steps:
       a claim the author never states: find it in the claim bank and link it
       with the premise it works together with.
     passage: |
-      Should colleges drug-test their athletes? {{d1|I'd say yes, they should}}.
+      Should colleges test their athletes for performance-enhancing drugs? {{d1|I'd say yes, they should}}.
       {{d2|These drugs give the people who use them an edge that nobody else gets}}.
 
       Some say {{d3|it's an invasion of privacy}}. But {{d4|athletes put up with
@@ -25,6 +25,10 @@ steps:
         - { type: objection, from: [d3], to: d1 }
         - { type: rebuttal, from: [d4], to: d3 }
     mistakes:
+      - relation: { type: objection, from: [b3], to: d3 }
+        message: >
+          Does the author say privacy doesn't matter, or only that athletes
+          already accept some intrusions on it?
       - relation: { type: support, from: [b2], to: d1 }
         message: >
           Does the author ever claim that most athletes use these drugs? Would
@@ -51,7 +55,7 @@ wordingChoices:
       - text: It's an invasion of privacy.
         why: “It” doesn't say what invades privacy, so the claim isn't clear on its own.
       - text: Drug testing should be illegal.
-        why: Too strong. The objection is about privacy, not about what the law should be.
+        why: That changes the claim. The objection is that testing invades privacy, not that the law should ban it.
   d4:
     best: Athletes already accept frequent intrusions on their privacy, such as routine exams by team doctors.
     others:

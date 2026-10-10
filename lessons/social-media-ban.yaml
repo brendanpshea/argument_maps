@@ -7,9 +7,9 @@ claimMode: highlight
 
 modelWording:
   s1: Lawmakers should ban social media accounts for people under sixteen.
-  s2: Heavy social media use is correlated with higher rates of anxiety and depression among teenagers.
+  s2: Heavy social media use is linked to rising rates of anxiety and depression among teenagers.
   s3: Younger teenagers are less able than adults to limit their own time on social media.
-  s5: A ban would be ineffective, because teenagers can easily lie about their age.
+  s5: A ban on teen social media accounts would be easy to evade, because teenagers can lie about their age.
 
 steps:
   - title: The argument

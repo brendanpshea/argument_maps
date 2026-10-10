@@ -65,6 +65,7 @@ export function buildDeck(
     const download = pngPath ? `<a class="argmap-download" href="${pngPath(index)}" download title="Download as PNG">PNG</a>` : '';
     return `\n<figure class="argmap" aria-label="${describe(result.diagram!).replace(/"/g, '&quot;')}">${svg}${download}</figure>\n`;
   });
-  const title = source.match(/^#\s+(.+)$/m)?.[1].trim() ?? id;
+  // From the Markdown after the diagrams are replaced, so a `# comment` in a diagram isn't the title.
+  const title = markdown.match(/^#[ \t]+(.+)$/m)?.[1].trim() ?? id;
   return { id, title, markdown, diagrams };
 }

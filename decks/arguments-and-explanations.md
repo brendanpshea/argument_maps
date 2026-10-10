@@ -15,7 +15,7 @@ P: Large animals such as elephants suffer in captivity
 P -> C
 ```
 
-Note: Point out the direction of the arrow: from the reason to what it supports. Ask students for the premise indicator in the passage ("because", "since").
+Note: Point out the direction of the arrow: from the reason to what it supports. There's no indicator word for this link in the zoo passage, so we infer the support; the "as" before the next claim marks a sub-argument (next slide).
 
 ---
 
@@ -93,7 +93,7 @@ Clue words: *must*, *necessarily*, *it follows that* (deductive) vs. *probably*,
 ```argmap
 C*: The butler is the thief
 P1: Whoever stole the jewels had to open the safe with its key
-P2: Only the butler had a key
+P2: No one but the butler could have used the key
 P1 + P2 -> C  [deductive, valid]
 ```
 
@@ -106,7 +106,7 @@ If both premises are true, the conclusion **must** be true.
 ```argmap
 C*: The butler is the thief
 P1: If the butler were the thief, he would have been nervous at dinner
-P2: He was nervous at dinner
+P2: The butler was nervous at dinner
 P1 + P2 -> C  [deductive, invalid]
 ```
 
@@ -145,7 +145,7 @@ A sample speaks for everyone only if it's **representative**. The argument assum
 
 ```argmap
 C*: About 62% of the school's students support a later start
-S: 62% of the 400 students who answered the survey support it
+S: 62% of the 400 students who answered the survey support a later start
 R (unstated): The students who answered are representative of the whole school
 S + R -> C
 O: The survey was posted only in the honors students' lounge  @2

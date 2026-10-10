@@ -1,9 +1,8 @@
 id: butler
 title: Who stole the jewels?
 description: >
-  An introduction to evaluating reasoning. Four reasons for the same
-  conclusion: one deductive and valid, one deductive but invalid, one
-  inductively strong, and one inductively weak.
+  An introduction to evaluating reasoning: four reasons for the same
+  conclusion, and they are not all equally good.
 claimMode: marked
 rewording: none
 
@@ -16,13 +15,13 @@ steps:
       {{c|the butler is the thief}}.
 
       Consider: {{p1|whoever stole the jewels had to open the safe with its key}}, and
-      {{p2|only the butler had a key}}. So it could only have been him.
+      {{p2|no one but the butler could have used the key}}. So it could only have been him.
 
       Also, {{p3|the butler's fingerprints were found on the jewel cases inside the safe}},
       which makes it very likely that he took them.
 
-      And {{p4|if the butler were the thief, he would have been nervous at dinner}}.
-      {{p5|He was clearly nervous at dinner}}, so he must be guilty.
+      And {{p4|if the butler were the thief, he would have been nervous at dinner}}. As it
+      happens, {{p5|the butler was clearly nervous at dinner}}, so he must be guilty.
 
       Finally, {{p6|in the mystery novels I've read, the butler is often the culprit}},
       which suggests he's the culprit here too.

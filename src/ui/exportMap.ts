@@ -25,7 +25,7 @@ export function downloadMapJson(lessonId: string, stepIndex: number, map: Argume
 
 export async function readMapFile(file: File, lessonId: string): Promise<ArgumentMap> {
   const data = JSON.parse(await file.text()) as Partial<MapFile>;
-  if (data.format !== 'argument-map' || !data.map || !Array.isArray(data.map.nodes)) {
+  if (data.format !== 'argument-map' || !data.map || !Array.isArray(data.map.nodes) || !Array.isArray(data.map.relations)) {
     throw new Error('That file is not a saved argument map.');
   }
   if (data.lessonId !== lessonId) {

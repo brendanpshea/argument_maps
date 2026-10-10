@@ -161,7 +161,7 @@ details > summary { cursor: pointer; color: var(--accent); }
 .claim-node.is-challenged { border-color: #a15c00; }
 .claim-node.is-challenged.is-selected { border-color: var(--accent); }
 .status-pill {
-  position: absolute; top: -0.75rem; right: 0.5rem; padding: 0 0.45rem; border-radius: 999px; border: 2px solid;
+  position: absolute; top: -0.75rem; right: -0.6rem; padding: 0 0.45rem; border-radius: 999px; border: 2px solid;
   font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; line-height: 1.25rem; background: #fff;
   pointer-events: auto;
 }

@@ -43,11 +43,23 @@ function ConclusionPick({ text, label, kind }: { text?: string; label?: string; 
   );
 }
 
+/** What a map says, ignoring where its claims and labels sit on the canvas. */
+const contentKey = (m: ArgumentMap) =>
+  JSON.stringify([
+    m.conclusion,
+    m.nodes.map((n) => [n.id, n.text, n.source]),
+    m.relations.map((r) => [r.id, r.type, r.from, r.to, r.evaluation]),
+  ]);
+
 const fresh = (): LessonProgress => ({ stepIndex: 0, maps: [emptyMap()], scores: [null], completed: false });
 const truncate = (s: string, n = 40) => (s.length > n ? `${s.slice(0, n - 1).trimEnd()}…` : s);
 
 export function LessonPlayer({ lesson, store, authorMode, onExit }: Props) {
-  const [progress, setProgress] = useState<LessonProgress>(() => store.load(lesson.id) ?? fresh());
+  const [progress, setProgress] = useState<LessonProgress>(() => {
+    const saved = store.load(lesson.id);
+    // Saved before the lesson was shortened: start again rather than point past the last step.
+    return saved && saved.stepIndex < lesson.steps.length ? saved : fresh();
+  });
   const [result, setResult] = useState<GradeResult | null>(null);
   const [showModel, setShowModel] = useState(false);
   const [message, setMessage] = useState('');
@@ -74,7 +86,7 @@ export function LessonPlayer({ lesson, store, authorMode, onExit }: Props) {
   const originalTextOf = (source: ClaimSource) =>
     isBank(source)
       ? lesson.claims[source.bank]?.passageText ?? ''
-      : lesson.steps[source.segment].passage.slice(source.start, source.end).trim();
+      : (lesson.steps[source.segment]?.passage ?? '').slice(source.start, source.end).trim();
   const editFor = (m: ArgumentMap, nodeId: string): WordingEdit => {
     const node = nodeById(m, nodeId);
     if (!node || lesson.rewording === 'none' || isBank(node.source)) return { kind: 'none' };
@@ -98,8 +110,11 @@ export function LessonPlayer({ lesson, store, authorMode, onExit }: Props) {
   };
 
   const setMap = (next: ArgumentMap) => {
-    setResult(null);
-    setCompared(false);
+    // Moving claims around doesn't change the answer, so it doesn't undo a check.
+    if (contentKey(next) !== contentKey(map)) {
+      setResult(null);
+      setCompared(false);
+    }
     setProgress((p) => ({ ...p, maps: p.maps.map((m, i) => (i === p.stepIndex ? next : m)) }));
   };
 
@@ -116,8 +131,9 @@ export function LessonPlayer({ lesson, store, authorMode, onExit }: Props) {
     setProgress((p) => {
       const maps = [...p.maps];
       const scores = [...p.scores];
-      // A newly unlocked step starts from the student's own (correct) map.
-      if (!maps[index]) maps[index] = structuredClone(maps[p.stepIndex]);
+      // A newly unlocked step starts from the student's own (correct) map. (Authors can jump
+      // ahead; fill any steps skipped on the way so saved progress has no gaps.)
+      for (let i = 0; i <= index; i++) if (!maps[i]) maps[i] = structuredClone(maps[i - 1] ?? maps[p.stepIndex] ?? emptyMap());
       while (scores.length <= index) scores.push(null);
       return { ...p, stepIndex: index, maps, scores };
     });
@@ -128,6 +144,14 @@ export function LessonPlayer({ lesson, store, authorMode, onExit }: Props) {
     const withNode = ops.addNode(emptyMap(), text, source);
     setMap({ ...withNode, conclusion: withNode.nodes[0].id });
   };
+
+  // After a reload, a step the student already got right stays passed (if the map still is right).
+  useEffect(() => {
+    if (progress.scores[stepIndex] !== 1 || freeReword) return;
+    const r = gradeStep(lesson, stepIndex, map);
+    if (r.earned === r.possible) setResult(r);
+    // Only on opening the lesson.
+  }, []);
 
   const recordScore = (fraction: number) => {
     setProgress((p) => {
@@ -146,6 +170,10 @@ export function LessonPlayer({ lesson, store, authorMode, onExit }: Props) {
   };
 
   const importMap = async (file: File) => {
+    if (task !== 'structure') {
+      setMessage('Maps can only be loaded on a mapping step: on this step, the structure of your map is fixed.');
+      return;
+    }
     try {
       setMap(await readMapFile(file, lesson.id));
       setMessage('Map loaded.');
@@ -235,7 +263,7 @@ export function LessonPlayer({ lesson, store, authorMode, onExit }: Props) {
               </button>
             )}
             {!isLast && (
-              <button className={passed ? 'primary' : ''} onClick={() => goTo(stepIndex + 1)} disabled={!canAdvance} title={canAdvance ? undefined : 'Get this step fully right to continue'}>
+              <button className={passed ? 'primary' : ''} onClick={(e) => e.detail <= 1 && goTo(stepIndex + 1)} disabled={!canAdvance} title={canAdvance ? undefined : 'Get this step fully right to continue'}>
                 Next step →
               </button>
             )}

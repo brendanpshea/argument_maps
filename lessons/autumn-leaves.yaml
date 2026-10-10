@@ -16,8 +16,8 @@ steps:
       explanandum? Click it.
     passage: |
       {{d1|Every October, thousands of tourists drive through New England to see the
-      foliage.}} What they come for is the fact that {{e|maple leaves turn red and orange
-      in autumn}}.
+      foliage.}} What they come for is the fact that {{e|maple leaves turn yellow, orange,
+      and red in autumn}}.
 
       The yellows and oranges come first. {{x1|As the days shorten, maple trees stop
       producing chlorophyll}}, and {{x2|chlorophyll is the green pigment that hides the

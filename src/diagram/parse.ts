@@ -26,10 +26,22 @@ export function parseArgmap(source: string, options: { kind?: string } = {}): { 
     if (!line || line.startsWith('#') || line.startsWith('//')) return;
     const where = `line ${i + 1}`;
     let step: number | undefined;
-    const stepMatch = line.match(/\s@(\d+)\s*$/);
-    if (stepMatch) {
-      step = Number(stepMatch[1]);
-      line = line.slice(0, stepMatch.index).trim();
+    let evalText: string | undefined;
+    // `@n` and `[evaluation]` can end a line in either order.
+    for (let more = true; more; ) {
+      more = false;
+      const stepMatch = line.match(/\s@(\d+)\s*$/);
+      if (stepMatch && step === undefined) {
+        step = Number(stepMatch[1]);
+        line = line.slice(0, stepMatch.index).trim();
+        more = true;
+      }
+      const evalMatch = !/^[A-Za-z][\w-]*\*?\s*(\([^)]*\))?\s*:/.test(line) && line.match(/\[([^\]]*)\]\s*$/);
+      if (evalMatch && evalText === undefined) {
+        evalText = evalMatch[1];
+        line = line.slice(0, evalMatch.index).trim();
+        more = true;
+      }
     }
 
     const claim = line.match(/^([A-Za-z][\w-]*)(\*)?\s*(?:\(([^)]*)\))?\s*:\s*(.+)$/);
@@ -46,11 +58,9 @@ export function parseArgmap(source: string, options: { kind?: string } = {}): { 
     }
 
     let evaluation: Evaluation | undefined;
-    const evalMatch = line.match(/\[([^\]]*)\]\s*$/);
-    if (evalMatch) {
-      line = line.slice(0, evalMatch.index).trim();
+    if (evalText !== undefined) {
       evaluation = {};
-      for (const word of evalMatch[1].split(/[\s,]+/).filter(Boolean)) {
+      for (const word of evalText.split(/[\s,]+/).filter(Boolean)) {
         if (word === 'deductive' || word === 'inductive') evaluation.type = word as InferenceType;
         else if (['valid', 'invalid', 'strong', 'weak'].includes(word)) evaluation.quality = word as InferenceQuality;
         else errors.push(`${where}: unknown evaluation "${word}" (use deductive/inductive and valid/invalid/strong/weak)`);
@@ -66,9 +76,14 @@ export function parseArgmap(source: string, options: { kind?: string } = {}): { 
       errors.push(`${where}: premises must be claim IDs joined with +`);
       return;
     }
+    if (new Set(from).size !== from.length) errors.push(`${where}: a premise is listed twice`);
+    if (links.some((l) => l.to === link[3] && l.type === ARROWS[link[2]] && l.from.length === from.length && l.from.every((f) => from.includes(f)))) {
+      errors.push(`${where}: this link is already in the diagram`);
+    }
     links.push({ type: ARROWS[link[2]], from, to: link[3], evaluation, step: step ?? 0 });
   });
 
+  if (!claims.length) errors.push('the diagram is empty: add claims like "C*: The conclusion"');
   const ids = new Set(claims.map((c) => c.id));
   for (const l of links) {
     for (const id of [...l.from, l.to]) if (!ids.has(id)) errors.push(`link ${l.from.join(' + ')} → ${l.to}: no claim with ID ${id}`);

@@ -21,15 +21,24 @@ export function claimStatuses(links: Link[]): Map<string, ClaimStatus> {
   const objections = links.filter((l) => l.type === 'objection');
   const memo = new Map<string, boolean>();
   const visiting = new Set<string>();
+  let cut = false;
 
   const challenged = (id: string): boolean => {
     if (memo.has(id)) return memo.get(id)!;
-    // A cycle of objections can't be settled from structure; treat it as unsettled (not challenged).
-    if (visiting.has(id)) return false;
+    // A cycle of objections can't be settled from structure: treat it as unsettled (not
+    // challenged), and don't remember answers that depended on cutting it, so the result
+    // doesn't depend on which claim we started from.
+    if (visiting.has(id)) {
+      cut = true;
+      return false;
+    }
     visiting.add(id);
+    const outer = cut;
+    cut = false;
     const result = objections.some((o) => o.to === id && !o.from.some(challenged));
+    if (!cut) memo.set(id, result);
     visiting.delete(id);
-    memo.set(id, result);
+    cut = cut || outer;
     return result;
   };
 

@@ -13,6 +13,19 @@ const lessonFiles = readdirSync(lessonsDir).filter((f) => /\.ya?ml$/.test(f));
 const load = (file: string) => compileLesson(readFileSync(join(lessonsDir, file), 'utf8'), file);
 
 describe('lesson files', () => {
+  it('have distinct ids (progress is saved by id)', () => {
+    const ids = lessonFiles.map((f) => load(f).id);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it('ignore saved progress in an unexpected shape', async () => {
+    const { validProgress } = await import('../storage/progress');
+    for (const bad of [{}, [], 1, 'x', null, { stepIndex: 1.5, maps: [], scores: [] }, { stepIndex: 0, maps: [{}], scores: [] }]) {
+      expect(validProgress(bad)).toBeNull();
+    }
+    expect(validProgress({ stepIndex: 0, maps: [{ nodes: [], relations: [] }], scores: [null] })).toMatchObject({ completed: false });
+  });
+
   it.each(lessonFiles)('%s is valid and every accepted variant earns full marks', (file) => {
     const lesson = load(file);
     lesson.steps.forEach((step, i) => {
@@ -252,8 +265,9 @@ describe('map editing', () => {
 });
 
 describe('linking and splitting premises', () => {
+  const node = (id: string) => ({ id, text: id, source: { bank: id }, position: { x: 0, y: 0 } });
   const base: ArgumentMap = {
-    nodes: [],
+    nodes: ['a', 'b', 'c', 'd'].map(node),
     relations: [
       { id: 'r1', type: 'support', from: ['a'], to: 'c' },
       { id: 'r2', type: 'support', from: ['b'], to: 'c' },
@@ -274,6 +288,28 @@ describe('linking and splitting premises', () => {
     const supports = split.relations.filter((r) => r.type === 'support');
     expect(supports.map((r) => r.from)).toEqual([['a'], ['b']]);
     expect(supports.every((r) => r.to === 'c')).toBe(true);
+  });
+
+  it('never leaves duplicate links or stale evaluations', async () => {
+    const ops = await import('../model/ops');
+    const m: ArgumentMap = {
+      nodes: ['a', 'b', 'c', 'd'].map(node),
+      relations: [
+        { id: 'r1', type: 'support', from: ['a', 'b'], to: 'c' },
+        { id: 'r2', type: 'support', from: ['b'], to: 'c' },
+        { id: 'r3', type: 'support', from: ['c'], to: 'd', evaluation: { type: 'deductive', quality: 'valid' } },
+        { id: 'r4', type: 'support', from: ['d'], to: 'c' },
+      ],
+    };
+    // Splitting a+b would recreate b → c.
+    expect(ops.splitRelation(m, 'r1').relations.filter((r) => r.to === 'c' && r.from.join() === 'b')).toHaveLength(1);
+    // Reversing c → d onto the existing d → c does nothing.
+    expect(ops.reverseRelation(m, 'r3')).toBe(m);
+    // Switching a link's kind drops its evaluation.
+    expect(ops.toggleRelationType(m, 'r3').relations.find((r) => r.id === 'r3')?.evaluation).toBeUndefined();
+    // Repeated premises and missing claims are ignored.
+    expect(ops.addRelation(m, 'support', ['a', 'a'], 'd').relations.at(-1)?.from).toEqual(['a']);
+    expect(ops.addPremise(m, 'r2', 'ghost')).toBe(m);
   });
 });
 
@@ -353,6 +389,57 @@ steps:
     expect(gradeStep(lesson, 0, both).items.some((i) => /repeats a claim/.test(i.message))).toBe(true);
   });
 
+  it('extra wrong links cost points, including a wrong version of an optional link', () => {
+    const right = [{ id: 'r', type: 'support' as const, from: ['p1', 'p2', 'p3'], to: 'c' }, objection];
+    expect(score(base([...right, { id: 'bad', type: 'support', from: ['o'], to: 'p2' }]))).toBeLessThan(1);
+    expect(score(base([...right, { id: 'rx', type: 'objection', from: ['x'], to: 'c' }], 'c', [node('x')]))).toBeLessThan(1);
+  });
+
+  it('grouping: either does not let a premise linked twice stand in for a missing one', () => {
+    const overlap = base([
+      { id: 'r1', type: 'support', from: ['p1', 'p2'], to: 'c' },
+      { id: 'r2', type: 'support', from: ['p2'], to: 'c' },
+      objection,
+    ]);
+    expect(score(overlap)).toBeLessThan(1);
+  });
+
+  it('grades the copy of a repeated claim that the student actually used', () => {
+    // A stray copy of the conclusion first, then its restatement starred and linked.
+    const m = base([{ id: 'r', type: 'support', from: ['p1', 'p2', 'p3'], to: 'c2' }, { ...objection, to: 'c2' }], 'c2', [node('c', 'stray')]);
+    m.nodes.unshift(m.nodes.pop()!);
+    const result = gradeStep(lesson, 0, m);
+    expect(result.earned).toBe(result.possible);
+    expect(result.items.some((i) => /repeats a claim/.test(i.message))).toBe(true);
+  });
+
+  it("doesn't call a correct link a near miss for another key", () => {
+    const yaml2 = `
+id: two
+title: Two
+steps:
+  - instructions: x
+    passage: "{{c|C}}. {{p|P}}. {{o|O}}."
+    answer:
+      conclusion: c
+      relations:
+        - { type: support, from: [p], to: c }
+        - { type: objection, from: [o], to: c }
+        - { type: objection, from: [o], to: p }
+`;
+    const two = compileLesson(yaml2);
+    const n = (id: string): MapNode => ({ id, text: id, source: two.claims[id].source, position: { x: 0, y: 0 } });
+    const result = gradeStep(two, 0, {
+      nodes: ['c', 'p', 'o'].map(n),
+      relations: [
+        { id: 'r1', type: 'support', from: ['p'], to: 'c' },
+        { id: 'r2', type: 'objection', from: ['o'], to: 'c' },
+      ],
+      conclusion: 'c',
+    });
+    expect(result.items.some((i) => /wrong claim/.test(i.message))).toBe(false);
+  });
+
   it('expands variants for the CI checks', () => {
     // 2 groupings × 2 targets × (optional in/out) = 8
     expect(expandVariants(lesson.steps[0].answers[0])).toHaveLength(8);
@@ -370,6 +457,29 @@ steps:
 `;
     expect(() => compileLesson(bad('[[a, zz]]'))).toThrow(/"zz"/);
     expect(() => compileLesson(bad('[[a, b], [b, c]]'))).toThrow(/more than one equivalent set/);
+  });
+
+  it('rejects lesson mistakes that would make a lesson impossible or misleading', () => {
+    const lesson = (body: string, extra = '') => `
+id: bad
+title: Bad
+${extra}
+steps:
+  - instructions: x
+    passage: "{{a|A}} {{b|B}} {{c|C}}"
+${body}
+`;
+    const ok = '    answer: { conclusion: a, relations: [{ type: support, from: [b], to: a }] }';
+    expect(() => compileLesson(lesson(ok + '\n    mistakes: [{ relation: { type: support, from: [typo], to: a }, message: m }]'))).toThrow(/"typo"/);
+    expect(() => compileLesson(lesson(ok.replace('{{c|C}}', '')).replace('{{c|C}}', '{{c| }}'))).toThrow(/empty/);
+    expect(() => compileLesson(lesson('    answer: { conclusion: a, relations: [{ type: support, from: [b], to: a }] }', 'equivalent: [[a, b]]'))).toThrow(/equivalent/);
+    expect(() =>
+      compileLesson(lesson('    answer: { conclusion: a, relations: [{ type: support, from: [b], to: a }, { type: objection, from: [b], to: a }] }')),
+    ).toThrow(/both supports and objects/);
+    const choose = (best: string, others: string) =>
+      lesson(ok, `rewording: choose\nwordingChoices:\n  b:\n    best: ${best}\n    others: [${others}]`);
+    expect(() => compileLesson(choose('B', '{ text: Other, why: w }'))).toThrow(/passage wording/);
+    expect(() => compileLesson(choose('Better', '{ text: Better, why: w }'))).toThrow(/same wording twice/);
   });
 });
 
