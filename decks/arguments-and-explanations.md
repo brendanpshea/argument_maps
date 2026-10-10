@@ -139,6 +139,38 @@ The full map from the practice lesson, with every link evaluated:
 
 ---
 
+## Generalizations
+
+A sample speaks for everyone only if it's **representative**. The argument assumes that, so we write it down.
+
+```argmap
+C*: About 62% of the school's students support a later start
+S: 62% of the 400 students who answered the survey support it
+R (unstated): The students who answered are representative of the whole school
+S + R -> C
+O: The survey was posted only in the honors students' lounge  @2
+O -x R
+Q: The survey was also emailed to every student  @3
+Q -x O
+```
+
+Note: Click through: the objection challenges the unstated premise (not the conclusion), and the rebuttal answers it. "Challenged" and "answered" come from the map's structure; they don't say who is right.
+
+---
+
+## Strong reasoning, challenged premise
+
+```argmap lesson=survey
+```
+
+- If the premises were true, the conclusion would be likely: the reasoning is **strong**.
+- The trouble is a **premise**, and the objection already says so.
+- So criticism goes after the premises: an argument is only as good as both its reasoning *and* its premises.
+
+[Try it: Is the survey representative? →](./#/lesson/survey)
+
+---
+
 ## Arguments vs. explanations
 
 An **explanation** doesn't try to convince you *that* something is true; it tells you **why** it is.
@@ -170,4 +202,5 @@ E2 => X
 - Arguments give **reasons for** a conclusion; explanations say **why** something is so.
 - Premises can be **linked** or **convergent**; claims can form **chains**.
 - **Objections** count against a claim; **rebuttals** answer objections.
+- **Generalizations** assume the sample is representative; write that premise down, since it's where objections usually land.
 - **Deductive** arguments are valid or invalid; **inductive** ones are strong or weak.

@@ -57,6 +57,9 @@ note, not a penalty.
     - relation: { type: support, from: [c3], to: c1 }
       message: Does (3) bear on the conclusion directly, or on another premise?
   ```
+  A mistake's message also replaces the generic hint for a near miss: a link
+  with the right premises but the wrong target, or the right target but the
+  wrong grouping (e.g. one premise alone where two should be linked).
 
 ## Accepting more than one map
 
@@ -307,7 +310,26 @@ bank:
 
 If a student leaves out a needed bank claim, feedback says how many unstated
 claims are missing without naming them. Decoys on the map get a no-points
-note, or your `mistakes` message if you wrote one.
+note, or your `mistakes` message if you wrote one. On the map, bank claims are
+tagged "unstated" and have a dashed border.
+
+### Generalizations and other inductive arguments
+
+Put the assumption a critic would attack into the bank as an unstated premise,
+linked with the evidence: for a generalization, that the sample is
+representative; for an analogy, that the cases are alike in the ways that
+matter; for an appeal to authority, that the source is a reliable expert.
+Objections then attack that premise, the inference is usually **strong** (or
+**valid**), and the map shows where the real disagreement is. See
+`survey.yaml`.
+
+### Challenged and answered claims
+
+Students' maps mark each claim that has objections, worked out from the map's
+structure alone: **? challenged** while an objection to it stands unanswered,
+and **✓ answered** once every objection to it has been rebutted. These marks
+are never graded and never judge whether a premise is true; they follow from
+the links the student drew.
 
 ## Building an answer key by drawing it
 

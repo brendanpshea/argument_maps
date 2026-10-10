@@ -1,0 +1,84 @@
+id: survey
+title: Is the survey representative?
+description: >
+  A generalization from a sample. Supply the premise the argument takes for
+  granted, see where an objection really lands, and judge the reasoning.
+claimMode: marked
+rewording: none
+
+steps:
+  - title: Map the generalization
+    instructions: >
+      Add the claims and mark the main conclusion. A survey only tells you
+      about the people who answered it, so this argument depends on a claim
+      the author never states. Find it in the claim bank and link it with the
+      premise it works together with.
+    passage: |
+      The student council wants the school day to start at 9:00 instead of 8:00.
+      {{d1|The council has proposed a later start twice before.}} This time it ran a
+      survey, and {{s|62% of the 400 students who answered said they support the later
+      start}}. So {{c|about 62% of the school's students support the later start}}.
+    answer:
+      conclusion: c
+      relations:
+        - { type: support, from: [s, r], to: c }
+    mistakes:
+      - relation: { type: support, from: [s], to: c }
+        message: >
+          The survey result is about the 400 students who answered. What would
+          have to be true of them for it to tell you about the whole school?
+          Look in the claim bank.
+      - relation: { type: support, from: [r], to: c }
+        message: >
+          Could that claim support the conclusion on its own, without the
+          survey result? Premises that only work together should be linked.
+
+  - title: An objection
+    instructions: >
+      A reporter for the school paper raises a problem. Add it to your map.
+      Which claim does it cast doubt on?
+    passage: |
+      A reporter for the school paper points out that {{o|the survey was posted only in
+      the honors students' lounge}}.
+    answer:
+      conclusion: c
+      relations:
+        - { type: support, from: [s, r], to: c }
+        - { type: objection, from: [o], to: r }
+    mistakes:
+      - relation: { type: objection, from: [o], to: c }
+        message: >
+          The reporter isn't saying anything about how many students support
+          the later start. What does the location of the survey tell you about
+          the students who answered it?
+      - relation: { type: objection, from: [o], to: s }
+        message: >
+          Does the reporter doubt that 62% of the people who answered said yes?
+          Or does the reporter doubt something about who those people were?
+
+  - task: evaluate
+    title: Evaluate the reasoning
+    instructions: >
+      Click the label on the support link. Judge the reasoning, not the
+      premises: suppose the premises are true, and ask how well they support
+      the conclusion. Whether a premise is true is a separate question, and
+      your map already shows that one premise has been challenged.
+    evaluations:
+      - link: { from: [s, r], to: c }
+        type: inductive
+        quality: strong
+        hint: >
+          Suppose both premises are true: 62% of the students who answered
+          support the later start, and those students really are
+          representative of the school. How likely is the conclusion then? The
+          reporter's point is aimed at a premise, not at the reasoning.
+
+bank:
+  - id: r
+    text: The students who answered the survey are representative of all the school's students.
+  - id: b1
+    text: The student council should move the start of the school day to 9:00.
+  - id: b2
+    text: Most students will read the results of the survey.
+  - id: b3
+    text: Starting school later would improve students' grades.

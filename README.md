@@ -36,7 +36,13 @@ the browser, with no server.
    locked map.
 7. **Evaluate the reasoning**: for each support link, say whether it is
    deductive or inductive, then whether it is valid/invalid or strong/weak.
-8. **Explanations** work the same way: students find the explanandum (what
+8. **Objections land on premises.** Unstated premises (from the claim bank)
+   have a dashed border. A claim with an unanswered objection is marked
+   **? challenged**, and **✓ answered** once every objection to it is rebutted.
+   This comes from the map's structure, not from judging whether the premise
+   is true. For generalizations, the premise that the sample is representative
+   goes on the map, and that's where objections usually land.
+9. **Explanations** work the same way: students find the explanandum (what
    is being explained) and map what explains it with "explains" links.
 
 Students can also use an **outline view** to do everything with the keyboard,

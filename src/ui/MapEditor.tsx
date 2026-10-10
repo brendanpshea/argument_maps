@@ -29,6 +29,7 @@ import '@xyflow/react/dist/style.css';
 import { toPng } from 'html-to-image';
 import { FAILED_COLOR, INDUCTIVE_DASH, isFailed, optionLabel, typeBadge, verdictLabel } from '../model/evaluationStyle';
 import { vocab } from '../model/vocab';
+import { claimStatuses, STATUS_LABEL, STATUS_TITLE, type ClaimStatus } from '../model/dialectic';
 import { QUALITIES, type LessonKind, type ArgumentMap, type Evaluation, type InferenceQuality, type InferenceType, type MapRelation, type RelationType } from '../model/types';
 import { autoLayout, CLAIM_SIZE, JUNCTION_SIZE } from '../model/layout';
 import * as ops from '../model/ops';
@@ -51,6 +52,8 @@ type ClaimData = {
   readOnly: boolean;
   /** Structure is fixed (reword steps): only the wording can change. */
   locked: boolean;
+  /** Where the claim stands in the debate on this map: challenged or answered. */
+  status?: ClaimStatus;
 };
 type JunctionData = {
   type: RelationType;
@@ -96,8 +99,15 @@ function ClaimNode({ id, data, selected }: NodeProps<ClaimNodeT>) {
   };
 
   return (
-    <div className={`claim-node${data.isConclusion ? ' is-conclusion' : ''}${selected ? ' is-selected' : ''}`}>
+    <div
+      className={`claim-node${data.isConclusion ? ' is-conclusion' : ''}${data.tag === 'unstated' ? ' is-unstated' : ''}${data.status ? ` is-${data.status}` : ''}${selected ? ' is-selected' : ''}`}
+    >
       <SideHandles />
+      {data.status && (
+        <span className={`status-pill ${data.status}`} title={STATUS_TITLE[data.status]}>
+          {STATUS_LABEL[data.status]}
+        </span>
+      )}
       <div className="claim-head">
         {data.label && <span className="claim-number">{data.label}</span>}
         {data.isConclusion && <span className="conclusion-tag">{data.conclusionLabel}</span>}
@@ -381,6 +391,7 @@ function buildNodes(map: ArgumentMap, props: MapEditorProps, prev: Node[]): Node
   };
   const readOnly = !!props.readOnly;
   const locked = !!props.locked;
+  const statuses = claimStatuses(map.relations);
   return [
     ...map.nodes.map(
       (n): ClaimNodeT => ({
@@ -398,6 +409,7 @@ function buildNodes(map: ArgumentMap, props: MapEditorProps, prev: Node[]): Node
           conclusionLabel: vocab(props.kind ?? 'argument').Conclusion,
           readOnly,
           locked,
+          status: statuses.get(n.id),
         },
       }),
     ),

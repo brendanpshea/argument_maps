@@ -10,6 +10,7 @@ import {
   verdictLabel,
 } from '../model/evaluationStyle';
 import { vocab } from '../model/vocab';
+import { CHALLENGED_COLOR, CHALLENGED_FILL, claimStatuses, STATUS_LABEL, type ClaimStatus } from '../model/dialectic';
 import type { Diagram, DiagramLink } from './model';
 
 /** Colours match the interactive map. Failed inferences (invalid or weak) are drawn in neutral grey. */
@@ -73,6 +74,31 @@ const linkLabel = (d: Diagram, l: DiagramLink) => {
 const fragment = (step: number, body: string) =>
   step > 1 ? `<g class="fragment" data-fragment-index="${step}">${body}</g>` : `<g>${body}</g>`;
 
+/** Shown from step `from` until step `until` (exclusive), when it fades out. */
+const during = (from: number, until: number | undefined, body: string) =>
+  until === undefined ? fragment(from, body) : `<g class="fragment fade-out" data-fragment-index="${until}">${fragment(from, body)}</g>`;
+
+/**
+ * Each claim's status (challenged or answered) over the build steps, as
+ * [from step, until step, status] spans. A static image shows only the final state.
+ */
+function statusSpans(d: Diagram, animate: boolean): Map<string, [number, number | undefined, ClaimStatus][]> {
+  const steps = animate ? [...new Set(d.links.map((l) => l.step))].sort((a, b) => a - b) : [Infinity];
+  const spans = new Map<string, [number, number | undefined, ClaimStatus][]>();
+  for (const step of steps) {
+    const statuses = claimStatuses(d.links.filter((l) => l.step <= step));
+    for (const c of d.claims) {
+      const list = spans.get(c.id) ?? [];
+      const last = list[list.length - 1];
+      const now = statuses.get(c.id);
+      if (last && last[1] === undefined && last[2] !== now) last[1] = step;
+      if (now && (!last || last[1] !== undefined)) list.push([animate ? step : 1, undefined, now]);
+      spans.set(c.id, list);
+    }
+  }
+  return spans;
+}
+
 /** A smooth path through dagre's edge points. */
 function pathThrough(points: { x: number; y: number }[]): string {
   if (points.length < 3) return `M${points.map((p) => `${p.x},${p.y}`).join(' L')}`;
@@ -89,8 +115,12 @@ function pathThrough(points: { x: number; y: number }[]): string {
 // which don't render while that diagram's slide is hidden. So each diagram gets its own.
 let diagramCount = 0;
 
-/** Renders a diagram as a standalone SVG string (usable in the browser and in Node). */
-export function renderDiagramSvg(d: Diagram): string {
+/**
+ * Renders a diagram as a standalone SVG string (usable in the browser and in Node).
+ * With `animate` (the default), later steps are reveal.js fragments; without it, the
+ * SVG shows the finished diagram (for PNG export).
+ */
+export function renderDiagramSvg(d: Diagram, { animate = true }: { animate?: boolean } = {}): string {
   const V = vocab(d.kind);
   const arrowId = `argmap${++diagramCount}-arrow`;
   const g = new dagre.graphlib.Graph();
@@ -162,6 +192,7 @@ export function renderDiagramSvg(d: Diagram): string {
     return fragment(l.step, lines.join('') + pill + badgeEl);
   });
 
+  const spans = statusSpans(d, animate);
   const claimEls = d.claims.map((c) => {
     const n = g.node(c.id);
     const x = n.x - n.width / 2;
@@ -171,7 +202,7 @@ export function renderDiagramSvg(d: Diagram): string {
     const tagColor = isConclusion ? '#b7791f' : '#6b4fa0';
     let ty = y + PAD + 13;
     const parts = [
-      `<rect x="${x}" y="${y}" width="${n.width}" height="${n.height}" rx="8" fill="${isConclusion ? '#fdf6e7' : '#ffffff'}" stroke="${isConclusion ? '#b7791f' : '#8a8f98'}" stroke-width="${isConclusion ? 3 : 2}"/>`,
+      `<rect x="${x}" y="${y}" width="${n.width}" height="${n.height}" rx="8" fill="${isConclusion ? '#fdf6e7' : '#ffffff'}" stroke="${isConclusion ? '#b7791f' : '#8a8f98'}" stroke-width="${isConclusion ? 3 : 2}"${dashFor(c.tag)}/>`,
     ];
     if (tag) {
       parts.push(`<text x="${x + PAD}" y="${ty}" font-size="11" font-weight="700" letter-spacing="0.5" fill="${tagColor}">${esc(tag)}</text>`);
@@ -184,6 +215,26 @@ export function renderDiagramSvg(d: Diagram): string {
     return fragment(c.step, parts.join(''));
   });
 
+  // Each claim's status in the debate: a pill on its top edge, and an amber border while challenged.
+  const statusEls = d.claims.flatMap((c) => {
+    const n = g.node(c.id);
+    const x = n.x - n.width / 2;
+    const y = n.y - n.height / 2;
+    return (spans.get(c.id) ?? []).map(([from, until, status]) => {
+      const label = STATUS_LABEL[status].toUpperCase();
+      const w = label.length * 7 + 16;
+      const px = x + n.width - w - 8;
+      const challenged = status === 'challenged';
+      const border = challenged
+        ? `<rect x="${x}" y="${y}" width="${n.width}" height="${n.height}" rx="8" fill="none" stroke="${CHALLENGED_COLOR}" stroke-width="${c.id === d.conclusion ? 3 : 2.5}"${dashFor(c.tag)}/>`
+        : '';
+      const pill =
+        `<rect x="${px}" y="${y - 10}" width="${w}" height="20" rx="10" fill="${challenged ? CHALLENGED_FILL : '#ffffff'}" stroke="${challenged ? CHALLENGED_COLOR : '#8a8f98'}" stroke-width="2"/>` +
+        `<text x="${px + w / 2}" y="${y + 3.5}" text-anchor="middle" font-size="10" font-weight="700" letter-spacing="0.3" fill="${challenged ? CHALLENGED_COLOR : '#4f545b'}">${esc(label)}</text>`;
+      return during(Math.max(from, c.step), until, `<g class="argmap-status ${status}">${border}${pill}</g>`);
+    });
+  });
+
   const { width, height } = g.graph() as { width: number; height: number };
   // Diagrams with evaluated links get a key along the bottom.
   const key = d.links.some((l) => l.evaluation?.type) ? legend(Math.ceil(height) + 6) : null;
@@ -191,9 +242,12 @@ export function renderDiagramSvg(d: Diagram): string {
   const h = Math.ceil(height) + (key ? 40 : 0);
   return (
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" style="--w:${w}" font-family="${esc(FONT)}" role="img" aria-label="${esc(describe(d))}">` +
-    `<defs>${markers}</defs>${claimEls.join('')}${linkEls.join('')}${key?.svg ?? ''}</svg>`
+    `<defs>${markers}</defs>${claimEls.join('')}${linkEls.join('')}${statusEls.join('')}${key?.svg ?? ''}</svg>`
   );
 }
+
+/** Unstated premises have a dashed border. */
+const dashFor = (tag?: string) => (tag === 'unstated' ? ' stroke-dasharray="6 4"' : '');
 
 const badgeWidth = (text: string) => (text ? text.length * 6.9 + 16 : 0);
 
@@ -238,5 +292,6 @@ export function describe(d: Diagram): string {
     const judged = l.evaluation?.type ? ` (${[l.evaluation.type, l.evaluation.quality].filter(Boolean).join(', ')})` : '';
     parts.push(`${l.from.map(text).join(' and ')} ${linkLabel(d, l)} ${text(l.to)}${judged}.`);
   }
+  for (const [id, status] of claimStatuses(d.links)) parts.push(`${text(id)}: ${status}.`);
   return parts.join(' ');
 }

@@ -153,6 +153,20 @@ details > summary { cursor: pointer; color: var(--accent); }
 }
 .claim-node.is-selected { border-color: var(--accent); box-shadow: 0 0 0 3px #1d5fa833; }
 .claim-node.is-conclusion { border-color: var(--conclusion); border-width: 3px; background: #fdf6e7; }
+/* Unstated premises (from the claim bank) have a dashed border. */
+.claim-node.is-unstated { border-style: dashed; }
+/* Where a claim stands in the debate: challenged (an unanswered objection) or answered.
+   Shown with a label as well as colour. */
+.claim-node { position: relative; }
+.claim-node.is-challenged { border-color: #a15c00; }
+.claim-node.is-challenged.is-selected { border-color: var(--accent); }
+.status-pill {
+  position: absolute; top: -0.75rem; right: 0.5rem; padding: 0 0.45rem; border-radius: 999px; border: 2px solid;
+  font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; line-height: 1.25rem; background: #fff;
+  pointer-events: auto;
+}
+.status-pill.challenged { color: #a15c00; border-color: #a15c00; background: #fff4e0; }
+.status-pill.answered { color: #4f545b; border-color: #8a8f98; }
 .claim-head { display: flex; flex-wrap: wrap; align-items: center; gap: 0.1rem 0.35rem; min-height: 1.4rem; font-size: 0.72rem; }
 .claim-head .claim-number { font-weight: 700; color: var(--accent); font-size: 0.8rem; }
 .conclusion-tag { font-weight: 700; color: var(--conclusion); text-transform: uppercase; letter-spacing: 0.03em; }
@@ -184,6 +198,9 @@ details > summary { cursor: pointer; color: var(--accent); }
   display: flex; gap: 0.5rem; align-items: center; justify-content: space-between;
   padding: 0.4rem 0.6rem; border: 1px dashed var(--border); border-radius: 6px; font-size: 0.92rem;
 }
+.outline-status { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; }
+.outline-status.challenged { color: #a15c00; }
+.outline-status.answered { color: #4f545b; }
 .claim-tag { color: #6b4fa0; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; }
 .wording-choices { display: grid; gap: 0.3rem; margin-top: 0.2rem; }
 .wording-choices button { text-align: left; font-size: 0.8rem; padding: 0.3rem 0.45rem; line-height: 1.35; }

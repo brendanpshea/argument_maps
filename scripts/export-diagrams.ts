@@ -9,6 +9,7 @@ import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { Resvg } from '@resvg/resvg-js';
 import { buildDeck } from '../src/diagram/deck';
+import { renderDiagramSvg } from '../src/diagram/svg';
 import { compileLesson } from '../src/lesson/compile';
 import type { Lesson } from '../src/model/types';
 
@@ -34,14 +35,15 @@ for (const file of readdirSync(join(root, 'decks')).filter((f) => f.endsWith('.m
       console.error(`${file}, diagram ${d.index}:\n  ${d.errors.join('\n  ')}`);
       continue;
     }
-    // Fragments are for live reveals; the exported image shows everything.
-    const png = new Resvg(d.svg, {
+    // Fragments are for live reveals; the exported image shows the finished diagram.
+    const svg = renderDiagramSvg(d.diagram!, { animate: false });
+    const png = new Resvg(svg, {
       fitTo: { mode: 'zoom', value: 2 },
       background: '#ffffff',
       font: { loadSystemFonts: true, defaultFontFamily: 'DejaVu Sans' },
     }).render();
     writeFileSync(join(dir, `${d.index}.png`), png.asPng());
-    writeFileSync(join(dir, `${d.index}.svg`), d.svg);
+    writeFileSync(join(dir, `${d.index}.svg`), svg);
     count++;
   }
 }

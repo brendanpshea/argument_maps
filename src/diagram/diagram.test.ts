@@ -6,6 +6,8 @@ import type { Lesson } from '../model/types';
 import { buildDeck } from './deck';
 import { parseArgmap } from './parse';
 import { renderDiagramSvg } from './svg';
+import { claimStatuses } from '../model/dialectic';
+import { diagramFromLesson } from './fromLesson';
 
 const root = join(__dirname, '../..');
 const lessons = new Map<string, Lesson>(
@@ -72,6 +74,57 @@ describe('argmap syntax', () => {
     for (const svg of [a, b]) {
       for (const [, ref] of svg.matchAll(/marker-end="url\(#([^)]+)\)"/g)) expect(ids(svg)).toContain(ref);
     }
+  });
+});
+
+describe('challenged and answered claims', () => {
+  const obj = (from: string, to: string) => ({ type: 'objection', from: [from], to });
+
+  it("works out each claim's status from the objections alone", () => {
+    const support = { type: 'support', from: ['S', 'R'], to: 'C' };
+    expect([...claimStatuses([support])]).toEqual([]);
+    // An unanswered objection challenges its target.
+    expect(claimStatuses([support, obj('O', 'R')]).get('R')).toBe('challenged');
+    // A rebuttal answers the objection: the target is answered, the objection challenged.
+    const answered = claimStatuses([support, obj('O', 'R'), obj('Q', 'O')]);
+    expect(answered.get('R')).toBe('answered');
+    expect(answered.get('O')).toBe('challenged');
+    // A rebuttal that is itself rebutted no longer answers anything.
+    const back = claimStatuses([support, obj('O', 'R'), obj('Q', 'O'), obj('X', 'Q')]);
+    expect([back.get('R'), back.get('O'), back.get('Q')]).toEqual(['challenged', 'answered', 'challenged']);
+    // One unanswered objection is enough, even if another is answered.
+    expect(claimStatuses([obj('O', 'R'), obj('Q', 'O'), obj('P', 'R')]).get('R')).toBe('challenged');
+    // A linked objection falls if any of its claims is challenged.
+    expect(claimStatuses([{ type: 'objection', from: ['A', 'B'], to: 'R' }, obj('Q', 'B')]).get('R')).toBe('answered');
+    // Cycles don't hang.
+    expect(claimStatuses([obj('A', 'B'), obj('B', 'A')]).size).toBe(2);
+  });
+
+  it('parses unstated premises and draws them dashed', () => {
+    const { diagram, errors } = parseArgmap('C*: C\nR (unstated): R\nS: S\nS + R -> C');
+    expect(errors).toEqual([]);
+    expect(diagram.claims.find((c) => c.id === 'R')?.tag).toBe('unstated');
+    expect(renderDiagramSvg(diagram)).toContain('stroke-dasharray="6 4"');
+    expect(parseArgmap('R (hidden): R').errors.join()).toMatch(/unknown note/);
+  });
+
+  it('shows status changes on the click they happen, and only the final state when static', () => {
+    const { diagram } = parseArgmap('C*: C\nR: R\nO: O @2\nQ: Q @3\nR -> C\nO -x R\nQ -x O');
+    const svg = renderDiagramSvg(diagram);
+    // R is challenged from click 2 until click 3, then answered.
+    expect(svg).toMatch(/<g class="fragment fade-out" data-fragment-index="3"><g class="fragment" data-fragment-index="2"><g class="argmap-status challenged">/);
+    expect(svg).toMatch(/<g class="fragment" data-fragment-index="3"><g class="argmap-status answered">/);
+    expect(svg).toContain('? CHALLENGED');
+    expect(svg).toContain('✓ ANSWERED');
+    const still = renderDiagramSvg(diagram, { animate: false });
+    expect(still).not.toContain('fade-out');
+    expect(still.match(/argmap-status/g)).toHaveLength(2); // R answered, O challenged
+  });
+
+  it("marks the survey lesson's unstated premise and its challenge", () => {
+    const { diagram } = diagramFromLesson(lessons.get('survey')!, 2);
+    expect(diagram!.claims.find((c) => c.id === 'r')?.tag).toBe('unstated');
+    expect(renderDiagramSvg(diagram!, { animate: false })).toContain('? CHALLENGED');
   });
 });
 
