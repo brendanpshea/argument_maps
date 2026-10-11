@@ -35,13 +35,18 @@ function midpoint(points: { x: number; y: number }[]): { x: number; y: number } 
 }
 const FONT = "system-ui, -apple-system, 'Segoe UI', Roboto, 'DejaVu Sans', 'Liberation Sans', sans-serif";
 
-const CLAIM_WIDTH = 250;
+/** Claim box widths to try; the one that shows the diagram largest on a slide wins. */
+const CLAIM_WIDTHS = [250, 320, 400];
 const PAD = 12;
 const FONT_SIZE = 15;
 const LINE = 20;
 const TAG_LINE = 16;
 /** Characters per line for wrapping (no DOM to measure text in Node); conservative for wide fonts. */
 const CHARS_PER_LINE = 25;
+/** Characters per line for a claim box of the given width (25 at the narrowest). */
+const charsFor = (width: number) => Math.floor((CHARS_PER_LINE * (width - 2 * PAD)) / (250 - 2 * PAD));
+/** The area a diagram gets on a slide (1280×800, less the title and margins). */
+const SLIDE_AREA = { width: 1180, height: 560 };
 
 // Layout node ids: claims and link labels get different prefixes, so a claim id can never
 // collide with a link's (or with an Object.prototype name, which breaks dagre).
@@ -134,25 +139,40 @@ let diagramCount = 0;
 export function renderDiagramSvg(d: Diagram, { animate = true }: { animate?: boolean } = {}): string {
   const V = vocab(d.kind);
   const arrowId = `argmap${++diagramCount}-arrow`;
-  const g = new dagre.graphlib.Graph();
-  g.setGraph({ rankdir: 'BT', nodesep: 34, ranksep: 46, marginx: 12, marginy: 12 });
-  g.setDefaultEdgeLabel(() => ({}));
-
-  const claimLines = new Map(d.claims.map((c) => [c.id, wrap(c.text)]));
   const hasTag = (id: string) => id === d.conclusion || !!d.claims.find((c) => c.id === id)?.tag;
-  for (const c of d.claims) {
-    const height = PAD * 2 + claimLines.get(c.id)!.length * LINE + (hasTag(c.id) ? TAG_LINE : 0);
-    g.setNode(C(c.id), { width: CLAIM_WIDTH, height });
-  }
-  d.links.forEach((l, i) => {
-    const label = pillText(d, l);
-    const badge = badgeFor(l);
-    const width = Math.max(label.length * 8 + 26, badgeWidth(badge) + 4);
-    g.setNode(L(i), { width, height: badge ? 46 : 26 });
-    for (const f of l.from) g.setEdge(C(f), L(i));
-    g.setEdge(L(i), C(l.to));
-  });
-  dagre.layout(g);
+  const keyWidth = d.links.some((l) => l.evaluation?.type) ? legend(0).width : 0;
+
+  // Lay the diagram out with each claim width and keep the one that would show largest on a
+  // slide: wider boxes wrap into fewer lines, so tall diagrams get shorter and use the width.
+  const layOut = (claimWidth: number) => {
+    const g = new dagre.graphlib.Graph();
+    // Link labels get a row of their own, but a thin one: they sit on the arrow.
+    g.setGraph({ rankdir: 'BT', nodesep: 34, ranksep: 30, marginx: 12, marginy: 12 });
+    g.setDefaultEdgeLabel(() => ({}));
+    const claimLines = new Map(d.claims.map((c) => [c.id, wrap(c.text, charsFor(claimWidth))]));
+    for (const c of d.claims) {
+      const lines = claimLines.get(c.id)!;
+      const height = PAD * 2 + lines.length * LINE + (hasTag(c.id) ? TAG_LINE : 0);
+      // Shrink the box to its longest line (estimated generously), but leave room for tags and pills.
+      const fit = Math.ceil(2 * PAD + Math.max(...lines.map((t) => t.length)) * 8.8 + 8);
+      g.setNode(C(c.id), { width: Math.min(claimWidth, Math.max(220, fit)), height });
+    }
+    d.links.forEach((l, i) => {
+      const label = pillText(d, l);
+      const badge = badgeFor(l);
+      const width = Math.max(label.length * 8 + 26, badgeWidth(badge) + 4);
+      g.setNode(L(i), { width, height: badge ? 46 : 26 });
+      for (const f of l.from) g.setEdge(C(f), L(i));
+      g.setEdge(L(i), C(l.to));
+    });
+    dagre.layout(g);
+    const { width, height } = g.graph() as { width: number; height: number };
+    const w = Math.max(width, keyWidth);
+    const h = height + (keyWidth ? 40 : 0);
+    return { g, claimLines, scale: Math.min(SLIDE_AREA.width / w, SLIDE_AREA.height / h), claimWidth };
+  };
+  // Ties go to the narrower boxes (the default look); a wider layout has to be clearly better.
+  const { g, claimLines } = CLAIM_WIDTHS.map(layOut).reduce((best, next) => (next.scale > best.scale * 1.08 ? next : best));
 
   // Filled arrowheads for most links; open ones for inductive links.
   const markers = (['support', 'objection', 'explanation', 'failed'] as const)

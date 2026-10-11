@@ -162,7 +162,7 @@ describe('diagram edge cases', () => {
     expect(svg).toContain('He said &quot;hi&quot; &amp; x &lt; y');
     expect(svg).not.toContain('\u0001');
     const lines = [...svg.matchAll(/<text [^>]*font-size="15"[^>]*>([^<]*)<\/text>/g)].map((m) => m[1]);
-    expect(lines.filter((l) => l.includes("example")).every((l) => l.length <= 25)).toBe(true);
+    expect(lines.filter((l) => l.includes("example")).every((l) => l.length <= 41)).toBe(true);
     expect(lines.filter((l) => !l.includes("&")).join("")).toContain("https://example.com/a/ver");
   });
 

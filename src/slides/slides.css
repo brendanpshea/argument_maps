@@ -1,6 +1,6 @@
 /* Diagrams on slides */
 .reveal figure.argmap { position: relative; margin: 0.4em auto; display: block; }
-/* Scale diagrams up to fill the slide (at most 1.8x, and no taller than 540px). */
+/* Scale diagrams up to fill the slide (at most 1.8x). The slides script then fits each one to its slide's free height. */
 .reveal figure.argmap svg { display: block; margin: 0 auto; height: auto; width: min(100%, calc(var(--w) * 1.8px)); max-height: 540px; }
 .reveal .argmap-download {
   position: absolute; right: 0; bottom: -1.6em; font-size: 14px; opacity: 0; transition: opacity 0.2s;
@@ -39,3 +39,9 @@ html:has(body:not(.deck-index)) { height: 100%; }
 @media (prefers-reduced-motion: reduce) {
   .reveal .fragment, .reveal .argmap-download { transition: none !important; }
 }
+
+/* A crowded slide: diagram on the left, its text on the right (set up by the slides script). */
+.reveal .argmap-split { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 32px; align-items: center; text-align: left; }
+.reveal .argmap-split figure.argmap { margin: 0; }
+.reveal .argmap-split-text { font-size: 0.85em; }
+.reveal .argmap-split-text ul { margin: 0; }
