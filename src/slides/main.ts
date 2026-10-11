@@ -49,6 +49,40 @@ if (!deck) {
     </main>`;
 } else {
   document.title = deck.title;
+  const SLIDE_HEIGHT = 800 * (1 - 0.06);
+  /**
+   * Lets a slide's diagram grow into (or shrink to) the slide's free height. A slide whose
+   * text would squeeze its only diagram to under 3/4 of its size puts the diagram and the
+   * text side by side instead, to use the slide's width.
+   */
+  const fitDiagram = (slide: Element) => {
+    const svgs = [...slide.querySelectorAll<SVGSVGElement>('figure.argmap svg')];
+    if (!svgs.length) return;
+    const fit = () => {
+      for (const svg of svgs) svg.style.maxHeight = '';
+      const spare = SLIDE_HEIGHT - (slide as HTMLElement).offsetHeight;
+      // Share the spare (or missing) height among the slide's diagrams.
+      const sizes = svgs.map((svg) => svg.clientHeight);
+      svgs.forEach((svg, i) => (svg.style.maxHeight = `${Math.max(160, sizes[i] + spare / svgs.length)}px`));
+      return { spare, natural: sizes[0] };
+    };
+    const { spare, natural } = fit();
+    const figure = svgs[0].closest('figure')!;
+    const split = svgs.length === 1 && !slide.querySelector('.argmap-split') && spare < -natural / 4;
+    if (!split || !figure.parentElement) return;
+    // Side by side: the diagram on the left, everything after the heading on the right.
+    const container = figure.parentElement === slide ? figure : figure.parentElement;
+    const wrap = document.createElement('div');
+    wrap.className = 'argmap-split';
+    const text = document.createElement('div');
+    text.className = 'argmap-split-text';
+    const rest = [...slide.children].filter((el) => el !== container && !/^H[1-3]$/.test(el.tagName) && !el.matches('aside.notes'));
+    container.replaceWith(wrap);
+    wrap.append(figure, text);
+    text.append(...rest);
+    fit();
+  };
+
   // The whole deck goes through reveal.js's Markdown plugin: --- separates slides, Note: starts speaker notes.
   root.innerHTML = `
     <div class="reveal">
@@ -72,5 +106,15 @@ if (!deck) {
     // reveal.js puts its arrows in an <aside>, a landmark nested inside the page; they're just controls.
     const controls = document.querySelector('.reveal .controls');
     controls?.setAttribute('role', 'none');
+    // Size each diagram to the room its slide has left: bigger when the slide is mostly
+    // diagram, smaller when text crowds it. (Printing lays out every slide at once.)
+    const all = () => document.querySelectorAll('.reveal .slides section');
+    const fitAll = () => {
+      (new URLSearchParams(location.search).has('print-pdf') ? [...all()] : [Reveal.getCurrentSlide()]).forEach((s) => s && fitDiagram(s));
+      Reveal.layout();
+    };
+    Reveal.on('slidechanged', fitAll);
+    void document.fonts.ready.then(fitAll);
+    fitAll();
   });
 }
